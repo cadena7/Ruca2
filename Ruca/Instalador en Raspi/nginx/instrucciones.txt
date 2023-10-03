@@ -1,0 +1,6 @@
+Proxy Inverso para redireccionar puertos con NGINX:
+1 - sudo apt-get install nginx
+2 - elimine el archivo de default que se encuentra en : sudo rm /etc/nginx/sites-enabled/default
+2 - crear un archivo de configuración como: sudo nano /etc/nginx/sites-available/webapp
+4 - Para habilitar esta configuración ejecute: sudo ln -s /etc/nginx/sites-available/webapp /etc/nginx/sites-enabled/webapp
+5 - Reinicie el servidor NGIX: sudo service nginx restart

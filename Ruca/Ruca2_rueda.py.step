@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - RUEDA DE FILTROS
-Version 1.5-dev          23/Septiembre/2023
+Version 1.4-dev          30/Agosto/2023
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -32,7 +32,6 @@ INICIO: busca inicio de los motores de paso
 
 Funciones Añadidas:
 
-Ver. 1.5 - Ahora la rueda utiliza control y motor de DC de Felix, el control maneja los switchs de inicio, indice y freno.
 Ver. 1.4 - Cambio de time.sleep(0.60) a time.sleep(1.0) y los de time.sleep(0.30) a time.sleep(0.50) y los de time.sleep(0.40) a time.sleep(1.0)
 Ver. 1.3 - Aumento de velocidad de motores de paso de 20RPM a 60RPM y reducción de time.sleep(2.0) a time.sleep(1.0)
 Ver. 1.2 - Correccion de bug en diccionario JSON para cambiar Nombres de Filtros
@@ -64,7 +63,6 @@ import simplejson as json
 
 import Ruca2_variables
 
-import serial  #flx
 
 
 # GPIOS Entradas
@@ -158,15 +156,6 @@ def turnOffReductor():
 # recommended for auto-disabling motors on shutdown!
 atexit.register(turnOffMotors)
 
-ser = serial.Serial(
-        port='/dev/ttyS0',
-        baudrate = 9600,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        bytesize=serial.EIGHTBITS,
-        timeout=1
-)
-
 
 
 # Envia a posiciones de inicio al ARRANCAR la rueda de filtros y rueda de polarizadores
@@ -176,6 +165,126 @@ def FirstinitPos():
     polarizacompletado = 1
     ruedapasosextra = 0
     polarizapasosextra = 0
+    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+    #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+    time.sleep(1.0)
+    print ("[+] INICIANDO Rueda de Filtros")
+    ruedatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
+    while variables.FIRST_INIT_RUEDA != 1:
+        RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.DOUBLE)
+        #RUEDA_MOTOR.oneStep(Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.SINGLE)
+        variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+        if variables.RUEDA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+            turnOffRueda()
+            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+            #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+            print ("[+] ERROR: FRENO NO SE DESACTIVO -- RUEDA: FRENO ON")
+            ruedacompletado = -1
+            break
+        if time.time() >= ruedatimeout:
+            ruedacompletado = 0
+            break
+        #print ("RUEDA_MOTOR+")
+        #time.sleep(0.05)
+    turnOffRueda()      # Busca posicion de freno correcta
+    time.sleep(0.50)
+    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+    #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+    time.sleep(1.0)
+    while ruedapasosextra < 15 and ruedacompletado != 0:
+        ruedapasosextra += 1
+        time.sleep(1.0)
+        if variables.RUEDA_FRENO_SENSOR == 0:
+            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+            #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+            time.sleep(1.0)
+            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+            variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+            #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+            print ("[+] RUEDA: PASO EXTRA")
+            ruedacompletado = -1
+        elif variables.RUEDA_FRENO_SENSOR == 1:
+            if variables.FIRST_INIT_RUEDA == 0:
+                ruedacompletado = -1
+            else:
+                ruedacompletado = 1
+            turnOffRueda()
+            print ("[+] RUEDA: FRENO ON")
+            break
+        if time.time() >= ruedatimeout:
+            print ("[+] RUEDA: TIMEOUT")
+            ruedacompletado = 0
+            break
+    turnOffRueda()
+    if ruedacompletado == 1:
+        print ("[+] Rueda de Filtros INICIALIZADA OK")
+    elif ruedacompletado == 0:
+        print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
+    elif ruedacompletado == -1:
+        print ("[+] ERROR: FRENO RUEDA NO LLEGO A SU POSICION")
+
+    '''
+    GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
+    #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+    time.sleep(1.0)
+    print ("[+] INICIANDO Rueda de Polarizadores")
+    polarizatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
+    while variables.FIRST_INIT_POLARIZA != 1:
+        POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.DOUBLE)
+        #POLARIZA_MOTOR.oneStep(Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.SINGLE)
+        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
+        if variables.POLARIZA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+            turnOffPolariza()
+            GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
+            #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+            print ("[+] ERROR: FRENO NO SE DESACTIVO -- POLARIZA: FRENO ON")
+            polarizacompletado = -1
+            break
+        if time.time() >= polarizatimeout:
+            polarizacompletado = 0
+            break
+        #print ("POLARIZA_MOTOR+")
+        #time.sleep(0.05)
+    turnOffPolariza()      # Busca posicion de freno correcta
+    time.sleep(0.50)
+    GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
+    #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+    time.sleep(1.0)
+    while polarizapasosextra < 15 and polarizacompletado != 0:
+        polarizapasosextra += 1
+        time.sleep(1.0)
+        if variables.POLARIZA_FRENO_SENSOR == 0:
+            GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
+            #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+            time.sleep(1.0)
+            POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+            variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
+            GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
+            #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+            print ("[+] POLARIZA: PASO EXTRA")
+            polarizacompletado = -1
+        elif variables.POLARIZA_FRENO_SENSOR == 1:
+            if variables.FIRST_INIT_POLARIZA == 0:
+                polarizacompletado = -1
+            else:
+                polarizacompletado = 1
+            turnOffPolariza()
+            print ("[+] POLARIZA: FRENO ON")
+            break
+        if time.time() >= polarizatimeout:
+            print ("[+] POLARIZA: TIMEOUT")
+            polarizacompletado = 0
+            break
+    turnOffPolariza()
+    if polarizacompletado == 1:
+        print ("[+] Rueda de Polarizadores INICIALIZADA OK")
+    elif polarizacompletado == 0:
+        print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
+    elif polarizacompletado == -1:
+        print ("[+] ERROR: FRENO POLARIZA NO LLEGO A SU POSICION")
+    '''
+
     GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.HIGH)
     time.sleep(1.0)
     print ("[+] INICIANDO Reductor Rojo")
@@ -195,7 +304,7 @@ def FirstinitPos():
     if reduccompletado == 1:
         print ("[+] Reductor Rojo OK")
     else:
-        print ("[+] ERROR: VERIFICAR SWITCH LIMITE #flx2")
+        print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
     time.sleep(1.0)
 
 
@@ -213,63 +322,17 @@ def initPos():
     principal = Principal()
     principal.initStatus()
     time.sleep(0.3)
-    FirstinitPos() #eocz
-    time.sleep(0.3)
-    toHome() #flx
+    FirstinitPos()
     print ("[+] Inicializada Rueda de Filtros OK")
-
-
-def toHome(): #flx manda la rueda al switch de inicio
-    print ("[+] INICIANDO Rueda de Filtros")
-    ser.flushInput()
-    ser.flushOutput()
-    ser.write( bytes('h', 'ascii'))
-    print ("[+] Buscando Switch de Inicio de Rueda de Filtros...")
-    for i in range (60):
-        print (".")
-        time.sleep(0.5)
-        x=ser.readline()
-        s = x.decode('ascii')
-        print (s)
-        if '1,1,0' in s:
-            variables.FIRST_INIT_RUEDA=1
-            variables.RUEDA_INICIO=1
-            variables.RUEDA_INDICE=1
-            variables.RUEDA_STOP=0
-            variables.RUEDA_PARO_EMERGENCIA=0
-            print ("[+] Inicio de Rueda de Filtros Encontrado OK")
-            return 0
-    variables.RUEDA_INICIO=0
-    variables.FIRST_INIT_RUEDA=0
-    print ("[-] Inicio de Rueda de Filtros No Encontrado")
-    print ("[-] Verifique que la rueda esta bien insertada")
-    return 2
-
-
-def movFilter(f): #flx mueve la rueda de filtros al setpoint
-    c='f{filtro}'
-    ser.flushInput()
-    ser.flushOutput()
-    t0=time.time()
-    ser.write(bytes(c.format(filtro = f), 'ascii'))
-    print ("[+] Moviendo Rueda de Filtros a Posicion: " + str(variables.RUEDA_INDICE_SET))
-    for i in range (30):
-        time.sleep(0.5)
-        x=ser.readline()
-        s = x.decode('ascii')
-        print (s,end='')
-        r='{f1},{f2},0'
-        if r.format(f1=f,f2=f) in s:
-            print('[+] Llego en:',time.time()-t0,'segundos')
-            return s.split(',')
-    return s.split(',')
 
 
 #Clase Principal
 class Principal():
     def __init__(self):
         GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+        #RUEDA_FRENO_OUT_PWM.start(0)
         GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
+        #POLARIZA_FRENO_OUT_PWM.start(0)
         GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.LOW)
         print ("[+] Variables de la Rueda de Filtros Cargadas")
 
@@ -278,11 +341,38 @@ class Principal():
     # these will run in another thread when our events are detected
     def rueda_inicio(self, channel):  #switch normalmente abierto
         time.sleep(0.005) # debounce for 5mSec
-        variables.RUEDA_INICIO=1 #flx
+        if GPIO.input(RUEDA_INICIO_PIN):
+            variables.RUEDA_INICIO = 1
+            print (">>rising edge detected on RUEDA_INICIO_PIN>>")
+            print ("RUEDA_INICIO = " + str(variables.RUEDA_INICIO))
+            variables.RUEDA_INDICE = 1
+            print ("RUEDA_INDICE = " + str(variables.RUEDA_INDICE))
+            variables.RUEDA_PASOS = 0
+            print ("RUEDA_PASOS = " + str(variables.RUEDA_PASOS))
+            variables.FIRST_INIT_RUEDA = 1
+        else:
+            variables.RUEDA_INICIO = 0
+            print ("<<falling edge detected on RUEDA_INICIO_PIN<<")
+            print ("RUEDA_INICIO = " + str(variables.RUEDA_INICIO))
+            print ("RUEDA_INDICE = " + str(variables.RUEDA_INDICE))
 
 
     def rueda_indice(self, channel):   #switch normalmente abierto
         time.sleep(0.005) # debounce for 5mSec
+        if GPIO.input(RUEDA_INDICE_PIN):
+            if GPIO.input(RUEDA_INICIO_PIN):
+                variables.RUEDA_INDICE = 1
+            else:
+                if variables.RUEDA_SENTIDO == 1:
+                    variables.RUEDA_INDICE = variables.RUEDA_INDICE + 1
+                    if variables.RUEDA_INDICE == 9:
+                        variables.RUEDA_INDICE = 1
+                else:
+                    variables.RUEDA_INDICE = variables.RUEDA_INDICE - 1
+                    if variables.RUEDA_INDICE == 0:
+                        variables.RUEDA_INDICE = 8
+        print (">>rising edge detected on RUEDA_INDICE_PIN>>")
+        print ("RUEDA_INDICE = " + str(variables.RUEDA_INDICE))
 
 
     def polariza_inicio(self, channel):   #switch normalmente abierto
@@ -379,6 +469,19 @@ class Principal():
             print ("<<falling edge detected on POLARIZA_FRENO_IN_PIN<<")
             print ("POLARIZA_FRENO_SENSOR = " + str(variables.POLARIZA_FRENO_SENSOR))
 
+    '''
+    def reductor_fuera(self, channel):    #switch normalmente abierto
+        time.sleep(0.005) # debounce for 5mSec
+        if GPIO.input(REDUCTOR_FUERA_PIN):
+            variables.REDUCTOR_FUERA = 1
+            variables.FIRST_INIT_REDUCTOR = 1
+            print (">>rising edge detected on REDUCTOR_FUERA_PIN>>")
+            print ("REDUCTOR_FUERA = " + str(variables.REDUCTOR_FUERA))
+        else:
+            variables.REDUCTOR_FUERA = 0
+            print ("<<falling edge detected on REDUCTOR_FUERA_PIN<<")
+            print ("REDUCTOR_FUERA = " + str(variables.REDUCTOR_FUERA))
+    '''
 
 
     # Detectamos interrupciones
@@ -398,7 +501,7 @@ class Principal():
 
     # Estado inicial de los interruptores
     def initStatus(self):
-        #variables.RUEDA_INICIO = GPIO.input(RUEDA_INICIO_PIN) #flx
+        variables.RUEDA_INICIO = GPIO.input(RUEDA_INICIO_PIN)
         #variables.RUEDA_INDICE = GPIO.input(RUEDA_INDICE_PIN)
         variables.POLARIZA_INICIO = GPIO.input(POLARIZA_INICIO_PIN)
         #variables.POLARIZA_INDICE = GPIO.input(POLARIZA_INDICE_PIN)
@@ -411,6 +514,15 @@ class Principal():
         variables.RUEDA_FRENO_SENSOR = GPIO.input(RUEDA_FRENO_IN_PIN)
         variables.POLARIZA_FRENO_SENSOR = GPIO.input(POLARIZA_FRENO_OUT_PIN)
 
+
+        if variables.RUEDA_INICIO == 1:
+            time.sleep(0.005) # debounce for 5mSec
+            if GPIO.input(RUEDA_INDICE_PIN):
+                variables.FIRST_INIT_RUEDA = 1
+                variables.RUEDA_INDICE = 1
+            else:
+                variables.FIRST_INIT_RUEDA = 0
+                variables.RUEDA_INDICE = 0
 
         if variables.POLARIZA_INICIO == 1:
             time.sleep(0.005) # debounce for 5mSec
@@ -438,7 +550,14 @@ class Principal():
                 variables.REDUCTOR_INDICE = 1
             else:
                 variables.REDUCTOR_AZUL = 0
-
+        '''
+        if variables.REDUCTOR_FUERA == 1:
+            time.sleep(0.005) # debounce for 5mSec
+            if GPIO.input(REDUCTOR_FUERA_PIN):
+                variables.REDUCTOR_FUERA = 1
+            else:
+                variables.REDUCTOR_FUERA = 0
+        '''
         if variables.RUEDA_FRENO_SENSOR == 0 or variables.RUEDA_FRENO_SENSOR == 1:
             time.sleep(0.005) # debounce for 5mSec
             if GPIO.input(RUEDA_FRENO_IN_PIN):
@@ -482,7 +601,7 @@ class Principal():
         print ("[+] Iniciando Servicio de Interrupciones OK")
         self.initStatus()
         time.sleep(0.2)
-        FirstinitPos() #eocz
+        FirstinitPos()
 
 
 
@@ -676,7 +795,7 @@ class ClientThread(Thread):
                         self.conn.send(str.encode('ERROR: ' + '-- VERIFICAR SWITCH LIMITE -- ' + data + '\n'))  # echo
                     except BrokenPipeError as e:
                         pass
-                    print ("[+] ERROR: VERIFICAR SWITCH LIMITE #flx3")
+                    print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
                     variables.FIRST_INIT_REDUCTOR = 0
                 self.conn.close()
                 break
@@ -693,17 +812,173 @@ class ClientThread(Thread):
                     break
                 variables.RUEDA_INDICE_SET = int(datasplit[1])
                 if variables.RUEDA_INDICE_SET >= 1 and variables.RUEDA_INDICE_SET <= 8:
-                    s=movFilter(variables.RUEDA_INDICE_SET) #flx
-                    variables.RUEDA_INDICE=int(s[0])
-                    print ("[*] Rueda de Filtros llego a Posicion: " + str(variables.RUEDA_INDICE)) #eocz
-                    if '0' in s[2]:
-                        self.completado=1
-                    else:
-                        self.completado=0
-
-                    print ("[+] flx: completado",s[2],self.completado)
-
-
+                    rueda_pos = variables.RUEDA_INDICE
+                    if rueda_pos == 8:
+                        rueda_pos = 0
+                    rueda_dif = rueda_pos - variables.RUEDA_INDICE_SET
+                    if rueda_dif == -4 or rueda_dif == -3 or rueda_dif == -2 or rueda_dif == -1 or rueda_dif == 4 or rueda_dif == 5 or rueda_dif == 6:
+                        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                        #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+                        time.sleep(1.0)
+                        print ("[+] RUEDA: FRENO OFF")
+                        #time.sleep(1.0)
+                        if variables.RUEDA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+                            turnOffRueda()
+                            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                            #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                            print ("[+] ERROR: FRENO NO SE DESACTIVO -- RUEDA: FRENO ON")
+                            try:
+                                self.conn.send(str.encode('ERROR: ' + '-- FRENO NO SE DESACTIVO -- ' + data + '\n'))  # echo
+                            except BrokenPipeError as e:
+                                pass
+                            self.conn.close()
+                            break
+                        variables.RUEDA_SENTIDO = 1      #suma contador, ver interrupciones
+                        while variables.RUEDA_INDICE != variables.RUEDA_INDICE_SET:
+                            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                            variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+                            try:
+                                self.conn.send(str.encode('+' + '\n'))  # echo
+                            except BrokenPipeError as e:
+                                pass
+                            if time.time() >= self.ruedatimeout:
+                                print ("[+] RUEDA: TIMEOUT")
+                                self.completado = 0
+                                break
+                            if variables.RUEDA_STOP == 1:
+                                print ("[+] PARO DE EMERGENCIA")
+                                self.completado = 0
+                                break
+                        turnOffRueda()      # Busca posicion de freno correcta
+                        time.sleep(0.50)
+                        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                        #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                        time.sleep(1.0)
+                        while self.pasosextra < 15 and self.completado != 0:
+                            self.pasosextra += 1
+                            time.sleep(1.0)
+                            if variables.RUEDA_FRENO_SENSOR == 0:
+                                GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                                #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+                                time.sleep(1.0)
+                                RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+                                GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                                #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                                try:
+                                    self.conn.send(str.encode('+' + '\n'))  # echo
+                                except BrokenPipeError as e:
+                                    pass
+                                print ("[+] RUEDA: PASO EXTRA")
+                                self.completado = -1
+                            elif variables.RUEDA_FRENO_SENSOR == 1:
+                                turnOffRueda()
+                                print ("[+] RUEDA: FRENO LLEGO")
+                                self.completado = 1
+                                break
+                            if time.time() >= self.ruedatimeout:
+                                print ("[+] RUEDA: TIMEOUT")
+                                self.completado = 0
+                                break
+                            if variables.RUEDA_STOP == 1:
+                                print ("[+] PARO DE EMERGENCIA")
+                                self.completado = 0
+                                break
+                    elif rueda_dif != 0 and rueda_dif != -8:
+                        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                        #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+                        time.sleep(1.0)
+                        print ("[+] RUEDA: FRENO OFF")
+                        if variables.RUEDA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+                            turnOffRueda()
+                            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                            #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                            print ("[+] ERROR: FRENO NO SE DESACTIVO -- RUEDA: FRENO ON")
+                            try:
+                                self.conn.send(str.encode('ERROR: ' + '-- FRENO NO SE DESACTIVO -- ' + data + '\n'))  # echo
+                            except BrokenPipeError as e:
+                                pass
+                            self.conn.close()
+                            break
+                        variables.RUEDA_SENTIDO = 0      #resta contador, ver interrupciones
+                        while variables.RUEDA_INDICE != variables.RUEDA_INDICE_SET:
+                            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                            variables.RUEDA_PASOS = variables.RUEDA_PASOS - 1
+                            try:
+                                self.conn.send(str.encode('-' + '\n'))  # echo
+                            except BrokenPipeError as e:
+                                pass
+                            if time.time() >= self.ruedatimeout:
+                                print ("[+] RUEDA: TIMEOUT")
+                                self.completado = 0
+                                break
+                            if variables.RUEDA_STOP == 1:
+                                print ("[+] PARO DE EMERGENCIA")
+                                self.completado = 0
+                                break
+                        time.sleep(1.0)
+                        RUEDA_MOTOR.step(80, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                        variables.RUEDA_PASOS = variables.RUEDA_PASOS - 80
+                        variables.RUEDA_INDICE = variables.RUEDA_INDICE - 1     #resta un contador para regresar en un mismo sentido siempre
+                        print (">>Restado 1 en RUEDA_INDICE_PIN para Compensar>>")
+                        print ("RUEDA_INDICE = " + str(variables.RUEDA_INDICE))
+                        variables.RUEDA_SENTIDO = 1      #suma contador, ver interrupciones
+                        time.sleep(1.0)
+                        while variables.RUEDA_INDICE != variables.RUEDA_INDICE_SET:
+                            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                            variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+                            try:
+                                self.conn.send(str.encode('+' + '\n'))  # echo
+                            except BrokenPipeError as e:
+                                pass
+                            if time.time() >= self.ruedatimeout:
+                                print ("[+] RUEDA: TIMEOUT")
+                                self.completado = 0
+                                break
+                            if variables.RUEDA_STOP == 1:
+                                print ("[+] PARO DE EMERGENCIA")
+                                self.completado = 0
+                                break
+                        turnOffRueda()      # Busca posicion de freno correcta
+                        time.sleep(0.50)
+                        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                        #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                        time.sleep(1.0)
+                        while self.pasosextra < 15 and self.completado != 0:
+                            self.pasosextra += 1
+                            time.sleep(1.0)
+                            if variables.RUEDA_FRENO_SENSOR == 0:
+                                GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                                #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
+                                time.sleep(1.0)
+                                RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
+                                GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                                #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                                try:
+                                    self.conn.send(str.encode('+' + '\n'))  # echo
+                                except BrokenPipeError as e:
+                                    pass
+                                print ("[+] RUEDA: PASO EXTRA")
+                                self.completado = -1
+                            elif variables.RUEDA_FRENO_SENSOR == 1:
+                                turnOffRueda()
+                                print ("[+] RUEDA: FRENO LLEGO")
+                                self.completado = 1
+                                break
+                            if time.time() >= self.ruedatimeout:
+                                print ("[+] RUEDA: TIMEOUT")
+                                self.completado = 0
+                                break
+                            if variables.RUEDA_STOP == 1:
+                                print ("[+] PARO DE EMERGENCIA")
+                                self.completado = 0
+                                break
+                    turnOffRueda()
+                    time.sleep(1.0)
+                    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                    #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
+                    print ("[+] RUEDA: FRENO ON")
                     if self.completado == 1:
                         try:
                             self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
@@ -715,15 +990,15 @@ class ClientThread(Thread):
                             self.conn.send(str.encode('ERROR: ' + '-- VERIFICAR SWITCH LIMITE -- ' + data + '\n'))  # echo
                         except BrokenPipeError as e:
                             pass
-                        print ("[+] ERROR: VERIFICAR SWITCH LIMITE #flx4")
-                        #variables.FIRST_INIT_RUEDA = 0 #flx
+                        print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
+                        variables.FIRST_INIT_RUEDA = 0
                     elif self.completado == -1:
                         try:
                             self.conn.send(str.encode('ERROR: ' + '-- FRENO RUEDA NO LLEGO A SU POSICION -- ' + data + '\n'))  # echo
                         except BrokenPipeError as e:
                             pass
                         print ("[+] ERROR: FRENO RUEDA NO LLEGO A SU POSICION")
-                        #variables.FIRST_INIT_RUEDA = 0 #flx
+                        variables.FIRST_INIT_RUEDA = 0
                     self.conn.close()
                     break
                 else:
@@ -925,7 +1200,7 @@ class ClientThread(Thread):
                             self.conn.send(str.encode('ERROR: ' + '-- VERIFICAR SWITCH LIMITE -- ' + data + '\n'))  # echo
                         except BrokenPipeError as e:
                             pass
-                        print ("[+] ERROR: VERIFICAR SWITCH LIMITE #flx5")
+                        print ("[+] ERROR: VERIFICAR SWITCH LIMITE")
                         variables.FIRST_INIT_POLARIZA = 0
                     elif self.completado == -1:
                         try:
@@ -1070,8 +1345,7 @@ class ClientThread(Thread):
 
 
             elif comando == 'INICIO':       #VA A INICIO DE POSICION
-                initPos() #eocz
-                #toHome() #flx
+                initPos()
                 try:
                     self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
                 except BrokenPipeError as e:
@@ -1232,7 +1506,6 @@ try:
     variables = Ruca2_variables.Rueda()      #Variables
     principal = Principal()
     principal.run()
-    toHome() #flx
 
     print ("[+] SERVIDOR DE LA RUCA 2.0 - RUEDA DE FILTROS Iniciado! Presione CTRL+C para Salir")
     # become a server socket

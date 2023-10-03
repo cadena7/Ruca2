@@ -1,0 +1,436 @@
+<!DOCTYPE HTML>
+<!--
+	Dimension by HTML5 UP
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>Rueda de Filtros RUCA 2019</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+        <meta http-equiv="refresh" content="120" >
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+	</head>
+	<body class="is-preload">
+
+		<!-- Wrapper -->
+			<div id="wrapper">
+
+				<!-- Header -->
+					<header id="header">
+						<div class="logo">
+							<span class="icon fa-space-shuttle"></span>
+						</div>
+						<div class="content">
+							<div class="inner">
+								<h1> RUCA 2.0 - 2019</h1>
+								<p> Rueda de Filtros del OAN-SPM </p>
+							</div>
+						</div>
+						<nav>
+							<ul>
+								<li><a href="#inicio">Rueda</a></li>
+                                <li><a href="#platina">Platina</a></li>
+                                <li><a href="#estado">Estado</a></li>
+								<li><a href="#contacto">Contacto</a></li>
+							</ul>
+						</nav>
+					</header>
+
+				<!-- Main -->
+					<div id="main">
+
+						<!-- Inicio -->
+							<article id="inicio">
+								<h2 class="major">Inicio</h2>
+								<span class="image main"><!--img src="images/pic01.jpg" alt="" /--></span>
+								<p>La rueda de filtros "la Ruca" es un instrumento para realizar observación con cámara directa. Está probada con los telescopios de 84 y 150 cm del observatorio de San Pedro Mártir, siendo el primero para el que fue diseñado, además podría también ser utilizado en el telescopio 2.1m empleando una montura ad-hoc.</p>
+                                <p>Para seleccionar un filtro, polarizador o reductor focal, de click en el boton deseado. Cuando este se encuentre en posición se iluminará de verde el botón. </p>
+                                <h2> Filtros </h2>
+
+                                <table class="table">
+
+                                    {% block TablaFiltros %}
+                                    <!--Filtros-->
+
+<!--                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                        </tr>
+                                    </thead>
+-->
+
+                                    <tbody>
+                                        <tr>
+                                        	{% if TablaEstadoRueda[1] == 1 %}
+                                            	<td bgcolor="#00cc00">{{ TablaFiltros[0] }}</td>
+                                        	{% elif TablaEstadoRueda[1] != 1 %}
+                                            	<td><a href="rueda1">{{ TablaFiltros[0] }}</a></td>
+                                        	{% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 2 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[1] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 2 %}
+                                                <td><a href="rueda2">{{ TablaFiltros[1] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 3 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[2] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 3 %}
+                                                <td><a href="rueda3">{{ TablaFiltros[2] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 4 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[3] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 4 %}
+                                                <td><a href="rueda4">{{ TablaFiltros[3] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 5 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[4] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 5 %}
+                                                <td><a href="rueda5">{{ TablaFiltros[4] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 6 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[5] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 6 %}
+                                                <td><a href="rueda6">{{ TablaFiltros[5] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 7 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[6] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 7 %}
+                                                <td><a href="rueda7">{{ TablaFiltros[6] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[1] == 8 %}
+                                                <td bgcolor="#00cc00">{{ TablaFiltros[7] }}</td>
+                                            {% elif TablaEstadoRueda[1] != 8 %}
+                                                <td><a href="rueda8">{{ TablaFiltros[7] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                    {% endblock %}
+                                    </tbody>
+                                </table>
+
+
+
+                                <h2> Polarizadores </h2>
+
+                                <table class="table">
+
+                                    {% block TablaPolarizadores %}
+                                    <!--Polarizadores-->
+
+<!--                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                        </tr>
+                                    </thead>
+-->
+                                    <tbody>
+                                        <tr>
+                                            {% if TablaEstadoRueda[3] == 1 %}
+                                                <td bgcolor="#00cc00">{{ TablaPolarizadores[0] }}</td>
+                                            {% elif TablaEstadoRueda[3] != 1 %}
+                                                <td><a href="polariza1">{{ TablaPolarizadores[0] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[3] == 2 %}
+                                                <td bgcolor="#00cc00">{{ TablaPolarizadores[1] }}</td>
+                                            {% elif TablaEstadoRueda[3] != 2 %}
+                                                <td><a href="polariza2">{{ TablaPolarizadores[1] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[3] == 3 %}
+                                                <td bgcolor="#00cc00">{{ TablaPolarizadores[2] }}</td>
+                                            {% elif TablaEstadoRueda[3] != 3 %}
+                                                <td><a href="polariza3">{{ TablaPolarizadores[2] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[3] == 4 %}
+                                                <td bgcolor="#00cc00">{{ TablaPolarizadores[3] }}</td>
+                                            {% elif TablaEstadoRueda[3] != 4 %}
+                                                <td><a href="polariza4">{{ TablaPolarizadores[3] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[3] == 5 %}
+                                                <td bgcolor="#00cc00">{{ TablaPolarizadores[4] }}</td>
+                                            {% elif TablaEstadoRueda[3] != 5 %}
+                                                <td><a href="polariza5">{{ TablaPolarizadores[4] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                    {% endblock %}
+                                    </tbody>
+                                </table>
+
+
+
+                                <h2> Reductores </h2>
+
+                                <table class="table">
+
+                                    {% block TablaReductores %}
+                                    <!--Reductores-->
+
+<!--                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                        </tr>
+                                    </thead>
+-->
+                                    <tbody>
+                                        <tr>
+                                            {% if TablaEstadoRueda[4] == 1 %}
+                                                <td bgcolor="#00cc00">{{ TablaReductores[0] }}</td>
+                                            {% elif TablaEstadoRueda[4] == 0 %}
+                                                <td><a href="reductor1">{{ TablaReductores[0] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[5] == 1 %}
+                                                <td bgcolor="#00cc00">{{ TablaReductores[1] }}</td>
+                                            {% elif TablaEstadoRueda[5] == 0 %}
+                                                <td><a href="reductor2">{{ TablaReductores[1] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                        <tr>
+                                            {% if TablaEstadoRueda[6] == 1 %}
+                                                <td bgcolor="#00cc00">{{ TablaReductores[2] }}</td>
+                                            {% elif TablaEstadoRueda[6] == 0 %}
+                                                <td><a href="reductor3">{{ TablaReductores[2] }}</a></td>
+                                            {% endif %}
+                                        </tr>
+                                    {% endblock %}
+                                    </tbody>
+                                </table>
+
+								{% if TablaEstadoRueda[16] == 1 and TablaEstadoRueda[18] == 1 %}
+                                    <form action="/startrueda" method="POST">
+                                        <input type="submit" value="Rueda de Filtros Inicializada" bgcolor="#00cc00">
+                                    </form>
+
+                                {% else %}
+                                    <form action="/startrueda" method="POST">
+                                        <input type="submit" value="Inicializar Rueda de Filtros" bgcolor="#f03d1d">
+                                    </form>
+
+                                {% endif %}
+									<form action="/stoprueda" method="POST">
+										<input type="submit" value="Detener Rueda de Filtros" bgcolor="#f03d1d">
+									</form>
+
+							</article>
+
+
+
+                            <!-- Estado -->
+    							<article id="estado">
+    								<h2 class="major">Inicio</h2>
+    								<span class="image main"><!--img src="images/pic01.jpg" alt="" /--></span>
+                                    <h2> Estado Actual </h2>
+
+                                    <table class="table">
+
+                                        {% block TablaEstadoRueda %}
+                                        <!--Filtros-->
+
+    <!--                                    <thead>
+                                            <tr>
+                                                <th>Nombre</th>
+                                            </tr>
+                                        </thead>
+    -->
+                                        <tbody>
+                                            <tr>
+                                                <td>RUEDA_INICIO: {{ TablaEstadoRueda[0] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>RUEDA_INDICE: {{ TablaEstadoRueda[1] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>POLARIZA_INICIO: {{ TablaEstadoRueda[2] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>POLARIZA_INDICE: {{ TablaEstadoRueda[3] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_AZUL: {{ TablaEstadoRueda[4] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_ROJO: {{ TablaEstadoRueda[5] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_FUERA: {{ TablaEstadoRueda[6] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_INDICE: {{ TablaEstadoRueda[21] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>RUEDA_FRENO: {{ TablaEstadoRueda[7] }}</td>
+                                            </tr>
+											<tr>
+                                                <td>RUEDA_FRENO_SENSOR: {{ TablaEstadoRueda[19] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>POLARIZA_FRENO: {{ TablaEstadoRueda[8] }}</td>
+                                            </tr>
+											<tr>
+                                                <td>POLARIZA_FRENO_SENSOR: {{ TablaEstadoRueda[20] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_FRENO: {{ TablaEstadoRueda[9] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>RUEDA_INDICE_SET: {{ TablaEstadoRueda[10] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>POLARIZA_INDICE_SET: {{ TablaEstadoRueda[11] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_SET: {{ TablaEstadoRueda[12] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>RUEDA_PASOS: {{ TablaEstadoRueda[13] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>POLARIZA_PASOS: {{ TablaEstadoRueda[14] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>REDUCTOR_PASOS: {{ TablaEstadoRueda[15] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>FIRST_INIT_RUEDA: {{ TablaEstadoRueda[16] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>FIRST_INIT_POLARIZA: {{ TablaEstadoRueda[17] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>FIRST_INIT_REDUCTOR: {{ TablaEstadoRueda[18] }}</td>
+                                            </tr>
+
+                                            <tr>
+                                                <td>PLATINA_INICIO: {{ TablaEstadoPlatina[0] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_FIN: {{ TablaEstadoPlatina[1] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_ENC: {{ TablaEstadoPlatina[2] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_POS: {{ TablaEstadoPlatina[3] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_SET: {{ TablaEstadoPlatina[4] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_MIN: {{ TablaEstadoPlatina[5] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_MAX: {{ TablaEstadoPlatina[6] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>PLATINA_FRENO: {{ TablaEstadoPlatina[7] }}</td>
+                                            </tr>
+											<tr>
+                                                <td>PLATINA_FRENO_SENSOR: {{ TablaEstadoPlatina[10] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>TEMP_ROBO_1: {{ TablaEstadoPlatina[8] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>FIRST_INIT_PLATINA: {{ TablaEstadoPlatina[9] }}</td>
+                                            </tr>
+                                        {% endblock %}
+                                        </tbody>
+                                    </table>
+
+
+    							</article>
+
+
+
+                        <!-- Platina-->
+                            <--article id="platina">
+                                <h2 class="major">Platina</h2>
+                                <p>Control de la Platina Giratoria de la Rueda de Filtros: </p>
+
+                                {% block TablaEstadoPlatina %}
+                                <form action="/platina" method="POST">
+        						<label>Set Point Platina (0 - 100 %)</label>
+        						<input type="text" name="SetPlatina" value="{{ TablaEstadoPlatina[3] }}">
+        						<input type="submit" value="Ingresar">
+    							</form>
+
+								<p>
+								</p>
+
+                                {% if TablaEstadoPlatina[9] == 1 %}
+                                <form action="/startplatina" method="POST">
+                                    <input type="submit" value="Platina Inicializada" bgcolor="#00cc00">
+                                </form>
+
+                                {% else %}
+                                <form action="/startplatina" method="POST">
+                                    <input type="submit" value="Inicializar Platina" bgcolor="#f03d1d">
+                                </form>
+
+                                {% endif %}
+
+                                <form action="/stopplatina" method="POST">
+        							<input type="submit" value="Detener Platina" bgcolor="#f03d1d">
+                            	</form>
+                                {% endblock %}
+
+                            </article>
+
+
+						<!-- Contacto-->
+							<article id="contacto">
+								<h2 class="major">Contacto</h2>
+								<span class="image main"><img src="images/logo.jpg" alt="" /></span>
+								<p>El sitio web es mantenido por:
+                                <br>Edgar Omar Cadena Zepeda
+                                <br>Técnico Académico de Instrumentación
+                                <br>Observatorio Astronómico Nacional de San Pedro Mártir </p>
+                                <ul class="icons">
+                                    <li><a href="mailto:cadena@astro.unam.mx" class="icon  fa-envelope"><span class="label">Email</span></a></li>
+                                </ul>
+							</article>
+
+
+					</div>
+
+				<!-- Footer -->
+					<footer id="footer">
+						<p class="copyright">&copy;Design: Edgar Omar Cadena Zepeda<a href="mailto:cadena@astro.unam.mx">     EMAIL</a>.</p>
+					</footer>
+
+			</div>
+
+		<!-- BG -->
+			<div id="bg"></div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>

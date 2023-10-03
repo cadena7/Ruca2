@@ -1,0 +1,7 @@
+AUMENTAR VELOCIDAD DEL BUS I2C:
+1 - sudo nano /boot/config.txt
+2 - Encuentra la linea “dtparam=i2c_arm=on”
+3 - Agrega “,i2c_arm_baudrate=400000” donde400000 es la nueva velocidad (400 Kbit/s)
+4 - Verifica que se lea asi: dtparam=i2c_arm=on,i2c_arm_baudrate=400000
+5 - CTRL-X, luego Y, graba el archivo y reinicia
+6 - sudo reboot
