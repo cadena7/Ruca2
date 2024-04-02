@@ -35,7 +35,7 @@ mosquitto_pub -h 192.168.0.243 -t oan/control/1.5m/ruca2/cambianombres -m (nombr
 
 Funciones Añadidas:
 
-Ver. 0.5 - IP Localhost
+Ver. 0.6 - IP Localhost
 Ver. 0.5 - Agregue try, except en el thread de monitoreo MQTT de la Ruca
 Ver. 0.4 - Fix JSON payload
 Ver. 0.3 - Al llegar a cada posicion manda actualizar topico Estado
