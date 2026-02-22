@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - ENDPOINT MQTT
-Version 0.6-dev          27/Septiembre/2023
+Version 0.7-dev          29/Julio/2024
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -35,6 +35,7 @@ mosquitto_pub -h 192.168.0.243 -t oan/control/1.5m/ruca2/cambianombres -m (nombr
 
 Funciones Añadidas:
 
+Ver. 0.7 - Dos nuevas variables de estado: RUEDA_SWITCH y RUEDA_SPEED
 Ver. 0.6 - IP Localhost
 Ver. 0.5 - Agregue try, except en el thread de monitoreo MQTT de la Ruca
 Ver. 0.4 - Fix JSON payload
@@ -234,6 +235,7 @@ def on_message(client, user_data, msg):
             startrueda1 = startrueda.communicate(str.encode("INICIO"))
             startrueda.kill()
             print ("[+] INICIO RUEDA OK")
+            publicaestado()
 
         elif status2 == 'STOP' or status2 == "PARA":
             stoprueda = subprocess.Popen(RUCA_IP, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr = subprocess.PIPE)
@@ -241,6 +243,7 @@ def on_message(client, user_data, msg):
             stoprueda1 = stoprueda.communicate(str.encode("STOP"))
             stoprueda.kill()
             print ("[+] STOP RUEDA OK")
+            publicaestado()
 
 
     elif topic == MQTT_CAMBIA_NOMBRES:
@@ -386,7 +389,10 @@ def publicaestado():
         'FIRST_INIT_REDUCTOR': estadojson1['FIRST_INIT_REDUCTOR'],
         'RUEDA_FRENO_SENSOR': estadojson1['RUEDA_FRENO_SENSOR'],
         'POLARIZA_FRENO_SENSOR': estadojson1['POLARIZA_FRENO_SENSOR'],
-        'RUEDA_PARO_EMERGENCIA': estadojson1['RUEDA_PARO_EMERGENCIA']
+        'RUEDA_PARO_EMERGENCIA': estadojson1['RUEDA_PARO_EMERGENCIA'],
+        'RUEDA_SPEED': estadojson1['RUEDA_SPEED'],
+        'RUEDA_SWITCH': estadojson1['RUEDA_SWITCH'],
+        'RUEDA_ESTADO': estadojson1['RUEDA_ESTADO']
         }
     msg_json = json.dumps(msg, separators=(',', ':'), sort_keys=True) #data serialized
     #print(msg_json)
@@ -439,12 +445,12 @@ class MQTTLOOP(Thread):
                 publicaestado()
             except:
                 pass
-            time.sleep(10) #actualiza el estado en MQTT cada 10 segundos
+            time.sleep(20) #actualiza el estado en MQTT cada 20 segundos
             try:
                 publicanombres()
             except:
                 pass
-            time.sleep(10) #actualiza el estado en MQTT cada 10 segundos
+            time.sleep(20) #actualiza el estado en MQTT cada 20 segundos
 
 # Programa Principal
 try:

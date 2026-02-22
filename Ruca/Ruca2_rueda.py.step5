@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - RUEDA DE FILTROS
-Version 2.0-dev          16/Noviembre/2025
+Version 1.8-dev          17/Noviembre/2024
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -34,11 +34,10 @@ STOP: detiene los movimientos y bloquea la rueda, para recuperar ejecutar el com
 FRENOS: libera o mete frenos energizando los solenoides
 
 Ejemplos:
-echo RUEDA 2 | nc 192.168.0.34 6666
+echo RUEDA 1 | nc 192.168.0.34 6666
 echo REDUCTOR 3 | nc 192.168.0.34 6666
 echo ESTADO | nc 192.168.0.34 6666
 echo INICIO | nc 192.168.0.34 6666
-echo NOMBRE | nc 192.168.0.34 6666
 echo SPEED 80 | nc 192.168.0.34 6666
 echo MUEVE 1 100 1 | nc 192.168.0.34 6666           #(echo MUEVE MOTOR(1-2-3) #STEPS DIR(1/0) | nc ip 6666)
 echo STOP | nc 192.168.0.34 6666
@@ -46,8 +45,6 @@ echo FRENOS 0 | nc 192.168.0.34 6666        #libera frenos
 
 Funciones Añadidas:
 
-Ver. 2.0 - Fix memory leak de threads en sockets
-Ver. 1.9 - Ahora el programa se reinicia diario a las 9:00 AM, entonces los filtros para que no se pierdan se almacenan en un archivo JSON
 Ver. 1.8 - Elimine el taca-taca de la inicializacion
 Ver. 1.7 - La rueda ahora solo gira en un sentido para ver si esto corrije la repetitibilidad
 Ver. 1.6 - Añadi comando SPEED para cambiar velocidad de rueda al vuelo, añadi flags de estado RUEDA_SWITCH Y RUEDA_ESTADO
@@ -131,7 +128,7 @@ tcpServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 tcpServer.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 # bind the socket to a public host, and a well-known port
 tcpServer.bind((TCP_IP, TCP_PORT))
-#threads = []
+threads = []
 #message_queues = {}
 
 
@@ -652,7 +649,7 @@ class Principal():
 
 # Multithreaded Python server : TCP Server Socket Thread Pool
 class ClientThread(Thread):
-    def __init__(self, ip, port, conn):
+    def __init__(self,ip,port):
         Thread.__init__(self)
         self.ip = ip
         self.port = port
@@ -1390,70 +1387,49 @@ class ClientThread(Thread):
                 break
 
 
-            elif comando == 'CAMBIO':  # CAMBIA Nombres de Filtros
-                print("Petición del Cliente por Cambio de Nombres: ", data)
-                nombresjson = data[6:]
+            elif comando == 'CAMBIO':     #CAMBIA Nombres de Filtros
+                print ("Peticicion del Cliente por Cambio de Nombres: ", data)
+                nombresjson = data[6:] # fix flx datasplit[1]
+                #nombresjson1 = nombresjson.decode('utf-8')    #decodificar el mensaje
+                #print(nombresjson)
                 nombresjson2 = json.loads(nombresjson)
 
-                # Ruta del archivo JSON
-                ruta_json = '/home/pi/Documents/Ruca/filtros.json'
+                if 'FILTRO01' in nombresjson2:
+                    variables.N_FILTRO_01 = nombresjson2['FILTRO01']                              #0
+                if 'FILTRO02' in nombresjson2:
+                    variables.N_FILTRO_02 = nombresjson2['FILTRO02']                              #1
+                if 'FILTRO03' in nombresjson2:
+                    variables.N_FILTRO_03 = nombresjson2['FILTRO03']                              #2
+                if 'FILTRO04' in nombresjson2:
+                    variables.N_FILTRO_04 = nombresjson2['FILTRO04']                              #3
+                if 'FILTRO05' in nombresjson2:
+                    variables.N_FILTRO_05 = nombresjson2['FILTRO05']                              #4
+                if 'FILTRO06' in nombresjson2:
+                    variables.N_FILTRO_06 = nombresjson2['FILTRO06']                              #5
+                if 'FILTRO07' in nombresjson2:
+                    variables.N_FILTRO_07 = nombresjson2['FILTRO07']                              #6
+                if 'FILTRO08' in nombresjson2:
+                    variables.N_FILTRO_08 = nombresjson2['FILTRO08']                              #7
 
-                # 1. Cargar el archivo existente si existe
-                datos_actuales = {}
-                if os.path.isfile(ruta_json):
-                    try:
-                        with open(ruta_json, 'r') as infile:
-                            datos_actuales = json.load(infile)
-                    except Exception as e:
-                        print("[*] ERROR al leer filtros.json:", e)
-                        pass
+                if 'POLARIZA01' in nombresjson2:
+                    variables.N_POLARIZA_01 = nombresjson2['POLARIZA01']                       #0
+                if 'POLARIZA02' in nombresjson2:
+                    variables.N_POLARIZA_02 = nombresjson2['POLARIZA02']                       #1
+                if 'POLARIZA03' in nombresjson2:
+                    variables.N_POLARIZA_03 = nombresjson2['POLARIZA03']                       #2
+                if 'POLARIZA04' in nombresjson2:
+                    variables.N_POLARIZA_04 = nombresjson2['POLARIZA04']                       #3
+                if 'POLARIZA05' in nombresjson2:
+                    variables.N_POLARIZA_05 = nombresjson2['POLARIZA05']                       #4
 
-                # 2. Actualizar solo las claves recibidas
-                datos_actuales.update(nombresjson2)
+                if 'REDUCTOR01' in nombresjson2:
+                    variables.N_REDUCTOR_01 = nombresjson2['REDUCTOR01']                          #0
+                if 'REDUCTOR02' in nombresjson2:
+                    variables.N_REDUCTOR_02 = nombresjson2['REDUCTOR02']                          #1
+                if 'REDUCTOR03' in nombresjson2:
+                    variables.N_REDUCTOR_03 = nombresjson2['REDUCTOR03']                          #2
 
-                # 3. Guardar el archivo actualizado
-                try:
-                    with open(ruta_json, 'w') as outfile:
-                        json.dump(datos_actuales, outfile, indent=4)
-                    print("[+] filtros.json actualizado correctamente con las nuevas claves.")
-                except Exception as e:
-                    print("[*] ERROR al guardar filtros.json:", e)
-                    pass
-
-                # 4. Aplicar cambios en variables si están presentes
-                for clave, valor in nombresjson2.items():
-                    if clave == 'FILTRO01':
-                        variables.N_FILTRO_01 = valor
-                    elif clave == 'FILTRO02':
-                        variables.N_FILTRO_02 = valor
-                    elif clave == 'FILTRO03':
-                        variables.N_FILTRO_03 = valor
-                    elif clave == 'FILTRO04':
-                        variables.N_FILTRO_04 = valor
-                    elif clave == 'FILTRO05':
-                        variables.N_FILTRO_05 = valor
-                    elif clave == 'FILTRO06':
-                        variables.N_FILTRO_06 = valor
-                    elif clave == 'FILTRO07':
-                        variables.N_FILTRO_07 = valor
-                    elif clave == 'FILTRO08':
-                        variables.N_FILTRO_08 = valor
-                    elif clave == 'POLARIZA01':
-                        variables.N_POLARIZA_01 = valor
-                    elif clave == 'POLARIZA02':
-                        variables.N_POLARIZA_02 = valor
-                    elif clave == 'POLARIZA03':
-                        variables.N_POLARIZA_03 = valor
-                    elif clave == 'POLARIZA04':
-                        variables.N_POLARIZA_04 = valor
-                    elif clave == 'POLARIZA05':
-                        variables.N_POLARIZA_05 = valor
-                    elif clave == 'REDUCTOR01':
-                        variables.N_REDUCTOR_01 = valor
-                    elif clave == 'REDUCTOR02':
-                        variables.N_REDUCTOR_02 = valor
-                    elif clave == 'REDUCTOR03':
-                        variables.N_REDUCTOR_03 = valor
+                print ("[+] CAMBIO NOMBRES FILTROS OK")
 
                 try:
                     self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
@@ -1507,56 +1483,6 @@ class ClientThread(Thread):
 
 
 
-def cargar_filtros_desde_json():
-    try:
-        with open('/home/pi/Documents/Ruca/filtros.json') as jsonfile:
-            nombresjson2 = json.load(jsonfile)
-            print("[+] Filtros y configuraciones cargadas correctamente")
-            print("[*] Contenido del JSON cargado:\n",
-                  json.dumps(nombresjson2, indent=4))  # Imprime bonito
-
-            if 'FILTRO01' in nombresjson2:
-                variables.N_FILTRO_01 = nombresjson2['FILTRO01']
-            if 'FILTRO02' in nombresjson2:
-                variables.N_FILTRO_02 = nombresjson2['FILTRO02']
-            if 'FILTRO03' in nombresjson2:
-                variables.N_FILTRO_03 = nombresjson2['FILTRO03']
-            if 'FILTRO04' in nombresjson2:
-                variables.N_FILTRO_04 = nombresjson2['FILTRO04']
-            if 'FILTRO05' in nombresjson2:
-                variables.N_FILTRO_05 = nombresjson2['FILTRO05']
-            if 'FILTRO06' in nombresjson2:
-                variables.N_FILTRO_06 = nombresjson2['FILTRO06']
-            if 'FILTRO07' in nombresjson2:
-                variables.N_FILTRO_07 = nombresjson2['FILTRO07']
-            if 'FILTRO08' in nombresjson2:
-                variables.N_FILTRO_08 = nombresjson2['FILTRO08']
-
-            if 'POLARIZA01' in nombresjson2:
-                variables.N_POLARIZA_01 = nombresjson2['POLARIZA01']
-            if 'POLARIZA02' in nombresjson2:
-                variables.N_POLARIZA_02 = nombresjson2['POLARIZA02']
-            if 'POLARIZA03' in nombresjson2:
-                variables.N_POLARIZA_03 = nombresjson2['POLARIZA03']
-            if 'POLARIZA04' in nombresjson2:
-                variables.N_POLARIZA_04 = nombresjson2['POLARIZA04']
-            if 'POLARIZA05' in nombresjson2:
-                variables.N_POLARIZA_05 = nombresjson2['POLARIZA05']
-
-            if 'REDUCTOR01' in nombresjson2:
-                variables.N_REDUCTOR_01 = nombresjson2['REDUCTOR01']
-            if 'REDUCTOR02' in nombresjson2:
-                variables.N_REDUCTOR_02 = nombresjson2['REDUCTOR02']
-            if 'REDUCTOR03' in nombresjson2:
-                variables.N_REDUCTOR_03 = nombresjson2['REDUCTOR03']
-
-    except Exception as e:
-        print("[*] ERROR - No se pudo cargar filtros.json - Omitiendo")
-        print("Detalle:", str(e))
-        pass
-
-
-
 # Programa Principal
 try:
     turnOffMotors()
@@ -1568,17 +1494,6 @@ try:
     # become a server socket
     tcpServer.listen(12)
 
-    cargar_filtros_desde_json()
-
-    while True:
-        print("Esperando por Conexiones en el puerto: " + str(TCP_PORT))
-        (conn, (ip, port)) = tcpServer.accept()
-
-        threadSockets = ClientThread(ip, port, conn)
-        threadSockets.daemon = True   # opcional, para que no bloqueen al salir
-        threadSockets.start()
-        
-    """
     while True:
         print ("Esperando por Conexiones...")
         (conn, (ip, port)) = tcpServer.accept()
@@ -1593,7 +1508,7 @@ try:
     # wait until worker threads are done to exit
     for t in threads:
         t.join()
-    """
+
 
 except (KeyboardInterrupt, SystemExit): # If CTRL+C is pressed, exit cleanly:
     turnOffMotors()
@@ -1607,5 +1522,5 @@ except (KeyboardInterrupt, SystemExit): # If CTRL+C is pressed, exit cleanly:
     sys.exit()
     #session.close()
     #session.dispose()
-    tcpServer.shutdown(socket.SHUT_RDWR)
+    tcpServer.shutdown()
     tcpServer.close()

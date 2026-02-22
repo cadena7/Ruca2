@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - INTERFAZ WEB DE USUARIO
-Version 0.5-dev          05/Nov/2019
+Version 0.6-dev          26/Julio/2024
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -25,6 +25,7 @@ basado en una microcomputadora de la línea Raspberry Pi 3 modelo B.
 
 Funciones Añadidas:
 
+Ver. 0.6 - Se agregaron variables RUEDA_SWITCH y RUEDA_SPEED
 Ver. 0.5 - Se agrego bandera de paro de emergencia
 Ver. 0.4 - Se deshabilito todo lo relacionado con la platina
 Ver. 0.4 - Se añadieron botones para inicializar rueda de filtros y platina
@@ -115,10 +116,14 @@ def inicio():
     POLARIZA_FRENO_SENSOR = estadojson2['POLARIZA_FRENO_SENSOR']     #20
     REDUCTOR_INDICE = estadojson2['REDUCTOR_INDICE']                 #21
     RUEDA_PARO_EMERGENCIA = estadojson2['RUEDA_PARO_EMERGENCIA']     #22
+    RUEDA_SWITCH = estadojson2['RUEDA_SWITCH']                       #23
+    RUEDA_SPEED = estadojson2['RUEDA_SPEED']                         #24
+    RUEDA_ESTADO = estadojson2['RUEDA_ESTADO']                       #25
 
     TablaEstadoRueda = [RUEDA_INICIO, RUEDA_INDICE, POLARIZA_INICIO, POLARIZA_INDICE, REDUCTOR_AZUL, REDUCTOR_ROJO, REDUCTOR_FUERA, RUEDA_FRENO, POLARIZA_FRENO,
                         REDUCTOR_FRENO, RUEDA_INDICE_SET, POLARIZA_INDICE_SET, REDUCTOR_SET, RUEDA_PASOS, POLARIZA_PASOS, REDUCTOR_PASOS, FIRST_INIT_RUEDA,
-                        FIRST_INIT_POLARIZA, FIRST_INIT_REDUCTOR, RUEDA_FRENO_SENSOR, POLARIZA_FRENO_SENSOR, REDUCTOR_INDICE, RUEDA_PARO_EMERGENCIA]
+                        FIRST_INIT_POLARIZA, FIRST_INIT_REDUCTOR, RUEDA_FRENO_SENSOR, POLARIZA_FRENO_SENSOR, REDUCTOR_INDICE, RUEDA_PARO_EMERGENCIA,
+                        RUEDA_SWITCH, RUEDA_SPEED, RUEDA_ESTADO]
     '''
     estado2 = subprocess.Popen("nc localhost 7777", shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr = subprocess.PIPE)
     estado3 = estado2.communicate(str.encode("ESTADO"))[0]  #regresa un tuple [0,1]
