@@ -1,0 +1,26 @@
+*************************************************
+Sincronizar el tiempo con el NTP local
+*************************************************
+editar este archivo:
+sudo nano /etc/systemd/timesyncd.conf
+
+Poner ip del servidor local de tiempo (en cada telescopio cambia)
+NTP=192.168.0.253
+FallbackNTP=192.168.0.253
+
+
+sudo timedatectl set-ntp true
+
+sudo systemctl restart systemd-timesyncd
+
+sudo timedatectl status
+
+
+
+
+Ademas en crontab agregue el siguiente script al arranque para sincronizar el tiempo mas rapido
+
+crontab -e
+@reboot /home/pi/ntp.sh
+crontab -l
+
