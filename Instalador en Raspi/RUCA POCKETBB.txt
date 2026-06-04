@@ -1,0 +1,51 @@
+POCKETBB IP
+iface usb0 inet static
+    address 192.168.7.2
+    netmask 255.255.255.252
+    network 192.168.7.0
+    gateway 192.168.7.1
+    dns-nameservers 192.168.0.253 8.8.8.8
+
+RUCA IP
+# RUCA static IP configuration:
+interface enxb827ebfea174
+#interface eth0
+static ip_address=192.168.0.34/24
+static routers=192.168.0.254
+#static domain_name_servers=192.168.0.1 8.8.8.8 fd51:42f8:caae:d92e::1
+
+#interface enxb827ebfea174
+interface eth0
+static ip_address=192.168.0.34/24
+static routers=192.168.0.254
+#static domain_name_servers=192.168.0.1 8.8.8.8 fd51:42f8:caae:d92e::1
+
+# POCKETBB static IP configuration:
+interface eth1
+static ip_address=192.168.7.1/30
+
+
+
+CONFIGURAR RPI CON IP PARA PODER COMUNICARSE CON LA POCKETBB
+
+sudo ifconfig eth1 192.168.7.1/30 up
+
+ssh -p 2276 debian@192.168.7.2
+temppwd
+
+
+HABILITAR UN PID
+echo "HABTASK" | nc -q 0 192.168.7.2 9095
+echo "RST" | nc -q 0 192.168.7.2 9095
+echo "KPX 8 KIX 0.001 KDX 2 ILX 400 " | nc -q 0 192.168.7.2 9095
+echo "AX= 0.025 VX= 2 " | nc -q 0 192.168.7.2 9095
+echo "MAXPOSX 200000 MINPOSX -200000" | nc -q 0 192.168.7.2 9095
+echo "CONTROL_PIDX" | nc -q 0 192.168.7.2 9095
+echo "X= 5000" | nc -q 0 192.168.7.2 9095
+
+EJEMPLOS DE MOVIMIENTO LIBRE
+echo "DAX 1000" | nc -q 0 192.168.7.2 9095
+echo "RST" | nc -q 0 192.168.7.2 9095
+echo "DAX -1000" | nc -q 0 192.168.7.2 9095
+echo "RST" | nc -q 0 192.168.7.2 9095
+echo "ESTADO" | nc -q 0 192.168.7.2 9095
