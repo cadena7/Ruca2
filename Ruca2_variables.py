@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - CLASE GLOBAL DE LAS VARIABLES
-Version 0.4-dev          26/Julio/2024
+Version 0.5-dev          4/Junio/2026
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -11,6 +11,7 @@ Rueda de filtros RUCA 2.0, consiste en una rueda de filtros, un polarizador,
 dos reductores focales y una platina giratoria.
 Funciones Añadidas:
 
+Ver. 0.5 - Botones añadidos
 Ver. 0.4 - Speed y Switch Rueda
 Ver. 0.3 - Paro de emergencia
 Ver. 0.2 - Nombres de Filtros
