@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - RUEDA DE FILTROS
-Version 2.2-dev          5/Junio/2026
+Version 2.0-dev          16/Noviembre/2025
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -46,8 +46,6 @@ echo FRENOS 0 | nc 192.168.0.34 6666        #libera frenos
 
 Funciones Añadidas:
 
-Ver. 2.2 - Se agrego lock global para rechazar comandos concurrentes de movimiento e inicializacion cuando la RUCA esta ocupada
-Ver. 2.1 - Se agrego control por botones GPIO B_START, B_STOP, B_UP y B_DOWN usando socket local y se añadieron sus variables al estado JSON
 Ver. 2.0 - Fix memory leak de threads en sockets
 Ver. 1.9 - Ahora el programa se reinicia diario a las 9:00 AM, entonces los filtros para que no se pierdan se almacenan en un archivo JSON
 Ver. 1.8 - Elimine el taca-taca de la inicializacion
@@ -77,7 +75,7 @@ import time
 import atexit
 import os
 import sys
-from threading import Thread, Lock
+from threading import Thread
 import random
 import socket
 import subprocess
@@ -96,11 +94,6 @@ REDUCTOR_AZUL_PIN = 5
 REDUCTOR_ROJO_PIN = 6
 RUEDA_FRENO_IN_PIN = 18
 POLARIZA_FRENO_IN_PIN = 24
-
-B_START_PIN = 7 #IN01
-B_STOP_PIN = 21 #IN02
-B_UP_PIN = 9    #IN03  
-B_DOWN_PIN = 10 #IN04
 
 # GPIOS Salidas
 RUEDA_FRENO_OUT_PIN = 23
@@ -121,11 +114,6 @@ GPIO.setup(REDUCTOR_ROJO_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)       #6  N.O
 GPIO.setup(RUEDA_FRENO_IN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)      #18  N.O.  Pull_down
 GPIO.setup(POLARIZA_FRENO_IN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)   #24  N.O.  Pull_down
 
-GPIO.setup(B_START_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)    #7    Pull_down
-GPIO.setup(B_STOP_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)     #21   Pull_down
-GPIO.setup(B_UP_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)       #9    Pull_down
-GPIO.setup(B_DOWN_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)     #10   Pull_down
-
 GPIO.setup(RUEDA_FRENO_OUT_PIN, GPIO.OUT)                                #23
 GPIO.setup(POLARIZA_FRENO_OUT_PIN, GPIO.OUT)                             #12
 GPIO.setup(REDUCTOR_FRENO_OUT_PIN, GPIO.OUT)                             #16
@@ -137,12 +125,6 @@ GPIO.setup(REDUCTOR_FRENO_OUT_PIN, GPIO.OUT)                             #16
 TCP_IP = '0.0.0.0'
 TCP_PORT = 6666
 BUFFER_SIZE = 2048  # Usually 1024, but we need quick response
-RUCA_LOCAL = "nc localhost 6666"
-B_START_LOCK = Lock()
-B_STOP_LOCK = Lock()
-B_MOVE_LOCK = Lock()
-COMANDO_MOV_LOCK = Lock()
-COMANDOS_MOVIMIENTO = ('REDUCTOR', 'RUEDA', 'POLARIZA', 'MUEVE', 'FRENOS', 'INICIO')
 
 # create an INET, STREAMing socket
 tcpServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -163,7 +145,7 @@ RUEDA_MOTOR = bottomhat.getStepper(200, 1)      # 200 steps/rev, motor port #1
 POLARIZA_MOTOR = tophat.getStepper(200, 2)      # 200 steps/rev, motor port #2
 REDUCTOR_MOTOR = tophat.getStepper(200, 1)      # 200 steps/rev, motor port #1
 
-RUEDA_MOTOR.setSpeed(80)                            # 80 RPM
+RUEDA_MOTOR.setSpeed(80)                         # 80 RPM
 POLARIZA_MOTOR.setSpeed(80)                         # 80 RPM
 REDUCTOR_MOTOR.setSpeed(200)                        # 200 RPM
 
@@ -373,61 +355,6 @@ def initPos():
     print ("[+] Inicializada Rueda de Filtros OK")
 
 
-def mandaComandoLocal(comando):
-    proceso = subprocess.Popen(RUCA_LOCAL, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    salida, error = proceso.communicate(str.encode(comando))
-    proceso.kill()
-    if salida:
-        print ("[+] RESPUESTA " + comando + ": " + salida.decode('utf-8', 'ignore').strip())
-    if error:
-        print ("[+] ERROR " + comando + ": " + error.decode('utf-8', 'ignore').strip())
-
-
-def ejecutaBStart():
-    if not B_START_LOCK.acquire(False):
-        print ("[+] B_START ignorado: STOP + INICIO en proceso")
-        return
-    try:
-        print ("[+] B_START solicitando STOP")
-        mandaComandoLocal("STOP")
-        print ("[+] B_START solicitando INICIO")
-        mandaComandoLocal("INICIO")
-    finally:
-        B_START_LOCK.release()
-
-
-def ejecutaBStop():
-    if not B_STOP_LOCK.acquire(False):
-        print ("[+] B_STOP ignorado: STOP en proceso")
-        return
-    try:
-        print ("[+] B_STOP solicitando STOP")
-        mandaComandoLocal("STOP")
-    finally:
-        B_STOP_LOCK.release()
-
-
-def ejecutaBMove(delta):
-    if not B_MOVE_LOCK.acquire(False):
-        print ("[+] B_UP/B_DOWN ignorado: movimiento de rueda en proceso")
-        return
-    try:
-        filtro_actual = variables.RUEDA_INDICE
-        if filtro_actual < 1 or filtro_actual > 8:
-            print ("[+] B_UP/B_DOWN ignorado: posicion actual de rueda no valida")
-            return
-        filtro_destino = filtro_actual + delta
-        if filtro_destino > 8:
-            filtro_destino = 1
-        elif filtro_destino < 1:
-            filtro_destino = 8
-        comando = "RUEDA " + str(filtro_destino)
-        print ("[+] B_UP/B_DOWN solicitando " + comando)
-        mandaComandoLocal(comando)
-    finally:
-        B_MOVE_LOCK.release()
-
-
 #Clase Principal
 class Principal():
     def __init__(self):
@@ -581,67 +508,6 @@ class Principal():
             print ("<<falling edge detected on POLARIZA_FRENO_IN_PIN<<")
             print ("POLARIZA_FRENO_SENSOR = " + str(variables.POLARIZA_FRENO_SENSOR))
 
-
-    def boton_start(self, channel):    #switch normalmente abierto
-        time.sleep(0.005) # debounce for 5mSec
-        if GPIO.input(B_START_PIN):
-            variables.B_START = 1
-            print (">>rising edge detected on B_START_PIN>>")
-            print ("B_START = " + str(variables.B_START))
-            threadBotonStart = Thread(target=ejecutaBStart)
-            threadBotonStart.daemon = True
-            threadBotonStart.start()
-        else:
-            variables.B_START = 0
-            print ("<<falling edge detected on B_START_PIN<<")
-            print ("B_START = " + str(variables.B_START))
-
-
-    def boton_stop(self, channel):    #switch normalmente abierto
-        time.sleep(0.005) # debounce for 5mSec
-        if GPIO.input(B_STOP_PIN):
-            variables.B_STOP = 1
-            print (">>rising edge detected on B_STOP_PIN>>")
-            print ("B_STOP = " + str(variables.B_STOP))
-            threadBotonStop = Thread(target=ejecutaBStop)
-            threadBotonStop.daemon = True
-            threadBotonStop.start()
-        else:
-            variables.B_STOP = 0
-            print ("<<falling edge detected on B_STOP_PIN<<")
-            print ("B_STOP = " + str(variables.B_STOP))
-
-
-    def boton_up(self, channel):    #switch normalmente abierto
-        time.sleep(0.005) # debounce for 5mSec
-        if GPIO.input(B_UP_PIN):
-            variables.B_UP = 1
-            print (">>rising edge detected on B_UP_PIN>>")
-            print ("B_UP = " + str(variables.B_UP))
-            threadBotonUp = Thread(target=ejecutaBMove, args=(1,))
-            threadBotonUp.daemon = True
-            threadBotonUp.start()
-        else:
-            variables.B_UP = 0
-            print ("<<falling edge detected on B_UP_PIN<<")
-            print ("B_UP = " + str(variables.B_UP))
-
-
-    def boton_down(self, channel):    #switch normalmente abierto
-        time.sleep(0.005) # debounce for 5mSec
-        if GPIO.input(B_DOWN_PIN):
-            variables.B_DOWN = 1
-            print (">>rising edge detected on B_DOWN_PIN>>")
-            print ("B_DOWN = " + str(variables.B_DOWN))
-            threadBotonDown = Thread(target=ejecutaBMove, args=(-1,))
-            threadBotonDown.daemon = True
-            threadBotonDown.start()
-        else:
-            variables.B_DOWN = 0
-            print ("<<falling edge detected on B_DOWN_PIN<<")
-            print ("B_DOWN = " + str(variables.B_DOWN))
-
-
     '''
     def reductor_fuera(self, channel):    #switch normalmente abierto
         time.sleep(0.005) # debounce for 5mSec
@@ -664,17 +530,12 @@ class Principal():
         GPIO.add_event_detect(RUEDA_INICIO_PIN, GPIO.BOTH, callback=self.rueda_inicio, bouncetime=200)
         GPIO.add_event_detect(RUEDA_INDICE_PIN, GPIO.BOTH, callback=self.rueda_indice, bouncetime=200) #RISING antes del 2024 julio
         GPIO.add_event_detect(POLARIZA_INICIO_PIN, GPIO.BOTH, callback=self.polariza_inicio, bouncetime=200)
-        GPIO.add_event_detect(POLARIZA_INDICE_PIN, GPIO.BOTH, callback=self.polariza_indice, bouncetime=200)
+        GPIO.add_event_detect(POLARIZA_INDICE_PIN, GPIO.RISING, callback=self.polariza_indice, bouncetime=200)
         GPIO.add_event_detect(REDUCTOR_AZUL_PIN, GPIO.BOTH, callback=self.reductor_azul, bouncetime=200)
         GPIO.add_event_detect(REDUCTOR_ROJO_PIN, GPIO.BOTH, callback=self.reductor_rojo, bouncetime=200)
         #GPIO.add_event_detect(REDUCTOR_FUERA_PIN, GPIO.BOTH, callback=self.reductor_fuera, bouncetime=200)
         GPIO.add_event_detect(RUEDA_FRENO_IN_PIN, GPIO.BOTH, callback=self.rueda_sensor, bouncetime=200)
         GPIO.add_event_detect(POLARIZA_FRENO_IN_PIN, GPIO.BOTH, callback=self.polariza_sensor, bouncetime=200)
-        GPIO.add_event_detect(B_START_PIN, GPIO.BOTH, callback=self.boton_start, bouncetime=200)
-        GPIO.add_event_detect(B_STOP_PIN, GPIO.BOTH, callback=self.boton_stop, bouncetime=200)
-        GPIO.add_event_detect(B_UP_PIN, GPIO.BOTH, callback=self.boton_up, bouncetime=200)
-        GPIO.add_event_detect(B_DOWN_PIN, GPIO.BOTH, callback=self.boton_down, bouncetime=200)
-        print ("[+] Interrupciones de la Rueda de Filtros Cargadas")
 
 
     # Estado inicial de los interruptores
@@ -692,10 +553,6 @@ class Principal():
         variables.RUEDA_FRENO_SENSOR = GPIO.input(RUEDA_FRENO_IN_PIN)
         variables.POLARIZA_FRENO_SENSOR = GPIO.input(POLARIZA_FRENO_OUT_PIN)
         variables.RUEDA_SWITCH = GPIO.input(RUEDA_INDICE_PIN)
-        variables.B_START = GPIO.input(B_START_PIN)
-        variables.B_STOP = GPIO.input(B_STOP_PIN)
-        variables.B_UP = GPIO.input(B_UP_PIN)
-        variables.B_DOWN = GPIO.input(B_DOWN_PIN)
 
         speed = variables.RUEDA_SPEED
         RUEDA_MOTOR.setSpeed(speed)
@@ -776,11 +633,7 @@ class Principal():
                 'RUEDA_PARO_EMERGENCIA': variables.RUEDA_STOP,
                 'RUEDA_SWITCH': variables.RUEDA_SWITCH,
                 'RUEDA_ESTADO': variables.RUEDA_ESTADO,
-                'RUEDA_SPEED': variables.RUEDA_SPEED,
-                'B_START': variables.B_START,
-                'B_STOP': variables.B_STOP,
-                'B_UP': variables.B_UP,
-                'B_DOWN': variables.B_DOWN
+                'RUEDA_SPEED': variables.RUEDA_SPEED
                 }
         estado_json = json.dumps(estado, separators=(',', ':'), sort_keys=True) #data serialized
         print ("[+] Estado inicial: ")
@@ -809,25 +662,11 @@ class ClientThread(Thread):
         self.polarizatimeout = time.time() + 60*1.20   # 1 minuto desde el inicio
         self.completado = 1
         self.pasosextra = 0
-        self.comando_mov_lock_adquirido = False
         print ("[+] Nuevo server socket thread iniciado desde " + ip + ":" + str(port))
         #self.conn.send(str.encode('Bienvenido '+ ip + ' procesando comando...' + '\n'))  # lo quite por errores en el json
 
 
-    def liberaComandoMovLock(self):
-        if self.comando_mov_lock_adquirido:
-            self.comando_mov_lock_adquirido = False
-            COMANDO_MOV_LOCK.release()
-
-
     def run(self):
-        try:
-            self._run()
-        finally:
-            self.liberaComandoMovLock()
-
-
-    def _run(self):
         #RUEDA_MOTOR bottomhat 1
         #POLARIZA_MOTOR bottomhat 2
         #REDUCTOR_MOTOR tophat 1
@@ -844,16 +683,6 @@ class ClientThread(Thread):
             datasplit = data.split(' ')
             comando = datasplit[0]
             print (datasplit) # debug
-            if comando in COMANDOS_MOVIMIENTO:
-                if not COMANDO_MOV_LOCK.acquire(False):
-                    print ("[+] ERROR: RUCA OCUPADA")
-                    try:
-                        self.conn.send(str.encode('ERROR: ' + '-- RUCA OCUPADA -- ' + data + '\n'))  # echo
-                    except BrokenPipeError as e:
-                        pass
-                    self.conn.close()
-                    break
-                self.comando_mov_lock_adquirido = True
 
             # Comandos
             if comando == 'REDUCTOR':           #EJEMPLO: echo REDUCTOR 1 | nc ip 6666  (del 1 al 3)
@@ -1491,10 +1320,6 @@ class ClientThread(Thread):
                 variables.REDUCTOR_FRENO = GPIO.input(REDUCTOR_FRENO_OUT_PIN)
                 variables.RUEDA_SWITCH = GPIO.input(RUEDA_INDICE_PIN)
                 variables.RUEDA_INICIO = GPIO.input(RUEDA_INICIO_PIN)
-                variables.B_START = GPIO.input(B_START_PIN)
-                variables.B_STOP = GPIO.input(B_STOP_PIN)
-                variables.B_UP = GPIO.input(B_UP_PIN)
-                variables.B_DOWN = GPIO.input(B_DOWN_PIN)
 
                 print ("Peticicion del Cliente por Estado: ", data)
                 estado = {
@@ -1523,11 +1348,7 @@ class ClientThread(Thread):
                     'RUEDA_PARO_EMERGENCIA': variables.RUEDA_STOP,
                     'RUEDA_SWITCH': variables.RUEDA_SWITCH,
                     'RUEDA_ESTADO': variables.RUEDA_ESTADO,
-                    'RUEDA_SPEED': variables.RUEDA_SPEED,
-                    'B_START': variables.B_START,
-                    'B_STOP': variables.B_STOP,
-                    'B_UP': variables.B_UP,
-                    'B_DOWN': variables.B_DOWN
+                    'RUEDA_SPEED': variables.RUEDA_SPEED
                     }
                 estado_json = json.dumps(estado, separators=(',', ':'), sort_keys=True) #data serialized
 

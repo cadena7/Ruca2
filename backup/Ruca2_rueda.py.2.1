@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - RUEDA DE FILTROS
-Version 2.2-dev          5/Junio/2026
+Version 2.1-dev          4/Junio/2026
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -46,7 +46,6 @@ echo FRENOS 0 | nc 192.168.0.34 6666        #libera frenos
 
 Funciones Añadidas:
 
-Ver. 2.2 - Se agrego lock global para rechazar comandos concurrentes de movimiento e inicializacion cuando la RUCA esta ocupada
 Ver. 2.1 - Se agrego control por botones GPIO B_START, B_STOP, B_UP y B_DOWN usando socket local y se añadieron sus variables al estado JSON
 Ver. 2.0 - Fix memory leak de threads en sockets
 Ver. 1.9 - Ahora el programa se reinicia diario a las 9:00 AM, entonces los filtros para que no se pierdan se almacenan en un archivo JSON
@@ -141,8 +140,6 @@ RUCA_LOCAL = "nc localhost 6666"
 B_START_LOCK = Lock()
 B_STOP_LOCK = Lock()
 B_MOVE_LOCK = Lock()
-COMANDO_MOV_LOCK = Lock()
-COMANDOS_MOVIMIENTO = ('REDUCTOR', 'RUEDA', 'POLARIZA', 'MUEVE', 'FRENOS', 'INICIO')
 
 # create an INET, STREAMing socket
 tcpServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -809,25 +806,11 @@ class ClientThread(Thread):
         self.polarizatimeout = time.time() + 60*1.20   # 1 minuto desde el inicio
         self.completado = 1
         self.pasosextra = 0
-        self.comando_mov_lock_adquirido = False
         print ("[+] Nuevo server socket thread iniciado desde " + ip + ":" + str(port))
         #self.conn.send(str.encode('Bienvenido '+ ip + ' procesando comando...' + '\n'))  # lo quite por errores en el json
 
 
-    def liberaComandoMovLock(self):
-        if self.comando_mov_lock_adquirido:
-            self.comando_mov_lock_adquirido = False
-            COMANDO_MOV_LOCK.release()
-
-
     def run(self):
-        try:
-            self._run()
-        finally:
-            self.liberaComandoMovLock()
-
-
-    def _run(self):
         #RUEDA_MOTOR bottomhat 1
         #POLARIZA_MOTOR bottomhat 2
         #REDUCTOR_MOTOR tophat 1
@@ -844,16 +827,6 @@ class ClientThread(Thread):
             datasplit = data.split(' ')
             comando = datasplit[0]
             print (datasplit) # debug
-            if comando in COMANDOS_MOVIMIENTO:
-                if not COMANDO_MOV_LOCK.acquire(False):
-                    print ("[+] ERROR: RUCA OCUPADA")
-                    try:
-                        self.conn.send(str.encode('ERROR: ' + '-- RUCA OCUPADA -- ' + data + '\n'))  # echo
-                    except BrokenPipeError as e:
-                        pass
-                    self.conn.close()
-                    break
-                self.comando_mov_lock_adquirido = True
 
             # Comandos
             if comando == 'REDUCTOR':           #EJEMPLO: echo REDUCTOR 1 | nc ip 6666  (del 1 al 3)

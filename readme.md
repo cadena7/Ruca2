@@ -40,6 +40,7 @@ echo RUEDA 2 | nc localhost 6666
 echo POLARIZA 3 | nc localhost 6666
 echo REDUCTOR 1 | nc localhost 6666
 echo SPEED 80 | nc localhost 6666
+echo MUEVE 1 100 1 | nc 192.168.0.34 6666
 echo STOP | nc localhost 6666
 echo FRENOS 0 | nc localhost 6666
 ```
