@@ -11,6 +11,7 @@ El código controla hardware real por GPIO, motores a pasos mediante Adafruit Mo
 | `Ruca2_rueda.py` | Servidor principal de rueda de filtros, polarizador y reductores. Escucha comandos TCP en el puerto `6666`. |
 | `Ruca2_platina.py` | Servidor de platina giratoria. Escucha comandos TCP en el puerto `7777`. |
 | `Ruca2_GUI.py` | Interfaz web Flask para operar RUCA desde navegador. |
+| `Ruca2_UI/` | Interfaz de escritorio GTK 3 con operación MQTT y herramientas de ingeniería por TCP. |
 | `Ruca2_mqtt.py` | Puente MQTT: recibe topicos de control y los traduce a comandos socket locales. |
 | `Ruca2_mqtt_status.py` | Publicador periodico de estado por MQTT. |
 | `Ruca2_variables.py` | Clases de variables globales para rueda y platina. |
@@ -19,6 +20,9 @@ El código controla hardware real por GPIO, motores a pasos mediante Adafruit Mo
 | `templates/` | Plantillas HTML de la interfaz web. |
 | `static/` | CSS, JS, fuentes e imagenes de la interfaz web. |
 | `Instalador en Raspi/` | Configuraciones de Supervisor, Nginx y notas de instalacion en Raspberry Pi. |
+
+La documentación detallada de la interfaz GTK se encuentra en
+[`Ruca2_UI/README.md`](Ruca2_UI/README.md).
 
 ## Servicios y puertos
 
@@ -55,7 +59,7 @@ Comandos disponibles:
 | `RUEDA 1..8` | Mueve la rueda al filtro indicado. |
 | `POLARIZA 1..5` | Mueve la rueda de polarizadores. |
 | `REDUCTOR 1..3` | Posiciona reductor azul, rojo o vacio. |
-| `SPEED <rpm>` | Ajusta velocidad de la rueda. |
+| `SPEED <rpm>` | Ajusta velocidad de la rueda entre `1..100 RPM`. |
 | `MUEVE <motor> <pasos> <dir>` | Movimiento manual de motor. |
 | `STOP` | Paro de emergencia y bloqueo hasta `INICIO`. |
 | `FRENOS 0/1` | Activa o libera frenos segun la logica del programa. |

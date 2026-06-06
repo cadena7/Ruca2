@@ -804,9 +804,9 @@ class ClientThread(Thread):
         self.ip = ip
         self.port = port
         self.conn = conn
-        self.reductimeout = time.time() + 60*1.20   # 1 minuto desde el inicio
-        self.ruedatimeout = time.time() + 60*1.20   # 1 minuto desde el inicio
-        self.polarizatimeout = time.time() + 60*1.20   # 1 minuto desde el inicio
+        self.reductimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
+        self.ruedatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
+        self.polarizatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
         self.completado = 1
         self.pasosextra = 0
         self.comando_mov_lock_adquirido = False
