@@ -18,10 +18,11 @@ RUCA2 UI permite operar la rueda de filtros y consultar el estado del instrument
 
 ## Pestaña Ingeniería
 
-Ingeniería es de uso exclusivo del personal técnico académico de soporte.
+Ingeniería es de uso exclusivo del personal técnico académico de soporte. La
+interfaz solicita confirmación cada vez que se entra a esta pestaña.
 
 - **Actualizar estado directo** consulta `ESTADO` mediante TCP.
-- **Aplicar velocidad** envía `SPEED` entre 1 y 100 RPM.
+- **Aplicar velocidad** solicita confirmación y envía `SPEED` entre 1 y 100 RPM.
 - **STOP** activa el paro de emergencia.
 - **INICIO** recupera e inicializa los mecanismos.
 - **Aplicar frenos** bloquea los tres mecanismos.

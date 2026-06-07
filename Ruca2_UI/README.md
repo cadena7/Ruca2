@@ -75,10 +75,9 @@ error. La interfaz debe ejecutarse desde `Ruca2_UI` para encontrar el archivo.
 La pestaña Ingeniería se comunica directamente con `Ruca2_rueda.py` mediante
 TCP. La dirección IP y el puerto son editables.
 
-Al intentar entrar por primera vez, la interfaz muestra un aviso indicando que
-la pestaña es de uso exclusivo del personal técnico académico de soporte. Si
-el usuario cancela, permanece en la pestaña anterior. La aceptación se conserva
-únicamente mientras la aplicación permanece abierta.
+Cada vez que se intenta entrar, la interfaz muestra un aviso indicando que la
+pestaña es de uso exclusivo del personal técnico académico de soporte. Si el
+usuario cancela, permanece en la pestaña anterior.
 
 Las operaciones TCP se ejecutan en un hilo para no bloquear GTK. Mientras un
 comando está activo, los controles de Ingeniería permanecen deshabilitados.
@@ -87,7 +86,7 @@ comando está activo, los controles de Ingeniería permanecen deshabilitados.
 
 | Control | Comando |
 | --- | --- |
-| Aplicar velocidad | `SPEED <rpm>`, limitado a `1..100 RPM`. |
+| Aplicar velocidad | Solicita confirmación y envía `SPEED <rpm>`, limitado a `1..100 RPM`. |
 | STOP | `STOP`, con confirmación. |
 | INICIO | `INICIO`, con confirmación. |
 

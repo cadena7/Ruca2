@@ -79,7 +79,6 @@ class MainApp():
         builder.add_from_file("ruca2.glade")
         builder.connect_signals(self)
 
-        self.engineering_access_authorized = False
         self.previous_notebook_page = 0
         self.restoring_notebook_page = False
 
@@ -210,7 +209,7 @@ class MainApp():
         if page == self.help_page:
             self.load_help_markdown()
 
-        if page == self.engineering_page and not self.engineering_access_authorized:
+        if page == self.engineering_page:
             authorized = self.confirm_action(
                 "Acceso restringido",
                 (
@@ -226,8 +225,6 @@ class MainApp():
                     self.previous_notebook_page
                 )
                 return
-
-            self.engineering_access_authorized = True
 
         self.previous_notebook_page = page_num
 
@@ -359,7 +356,11 @@ class MainApp():
             )
             return
 
-        self.send_engineering_command(f"SPEED {speed}", speed)
+        if self.confirm_action(
+            "Confirmar ajuste de velocidad",
+            f"¿Desea ajustar la velocidad de la rueda a {speed} RPM?"
+        ):
+            self.send_engineering_command(f"SPEED {speed}", speed)
 
 
     # =============================================
