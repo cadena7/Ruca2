@@ -39,6 +39,7 @@ Ejemplos usando `nc`:
 
 ```bash
 echo INICIO | nc localhost 6666
+echo INIT | nc localhost 6666
 echo ESTADO | nc localhost 6666
 echo RUEDA 2 | nc localhost 6666
 echo POLARIZA 3 | nc localhost 6666
@@ -47,13 +48,15 @@ echo SPEED 80 | nc localhost 6666
 echo MUEVE 1 100 1 | nc 192.168.0.34 6666
 echo STOP | nc localhost 6666
 echo FRENOS 0 | nc localhost 6666
+echo FRENO_RUEDA_CONFIG | nc localhost 6666
+echo FRENO_RUEDA_CONFIG 1 0 | nc localhost 6666
 ```
 
 Comandos disponibles:
 
 | Comando | Descripcion |
 | --- | --- |
-| `INICIO` | Inicializa la rueda de filtros y reductores. |
+| `INICIO` / `INIT` | Inicializa la rueda de filtros y reductores. Ambos comandos hacen lo mismo. |
 | `ESTADO` | Devuelve estado en JSON. |
 | `NOMBRE` | Devuelve nombres de filtros, polarizadores y reductores. |
 | `RUEDA 1..8` | Mueve la rueda al filtro indicado. |
@@ -63,6 +66,7 @@ Comandos disponibles:
 | `MUEVE <motor> <pasos> <dir>` | Movimiento manual de motor. |
 | `STOP` | Paro de emergencia y bloqueo hasta `INICIO`. |
 | `FRENOS 0/1` | Activa o libera frenos segun la logica del programa. |
+| `FRENO_RUEDA_CONFIG [0/1 0/1]` | Consulta o modifica el uso del freno de rueda y de su microswitch. |
 
 ## Comandos socket de platina
 

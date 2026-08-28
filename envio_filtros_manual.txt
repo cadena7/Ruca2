@@ -1,0 +1,36 @@
+ENVIO MANUAL DE NOMBRES DE FILTROS POR MQTT
+===========================================
+
+Ejecutar en la computadora de la interfaz desde el directorio que contiene
+el archivo ruca_rueda2.fil:
+
+    cd /home/observa/cadena/Ruca2_UI
+
+Enviar los nombres al servidor RUCA:
+
+python3 -c '
+import json
+filtros=open("/home/observa/ruca_rueda1.fil").read().splitlines()[:8]
+polarizadores=open("ruca_rueda2.fil").read().splitlines()[:5]
+datos={f"Filtro{i+1:02d}": nombre for i,nombre in enumerate(filtros)}
+datos.update({f"Polariza{i+1:02d}": nombre for i,nombre in enumerate(polarizadores)})
+datos.update({
+    "Reductor01":"Reductor Azul",
+    "Reductor02":"Reductor Rojo",
+    "Reductor03":"Sin Reductor"
+})
+print(json.dumps(datos,separators=(",",":")))
+' | mosquitto_pub \
+-h 192.168.0.243 -p 1883 \
+-t 'oan/control/1.5m/ruca2/cambianombres' -l
+
+Verificar que el servidor publico los nombres actualizados:
+
+mosquitto_sub -h 192.168.0.243 -p 1883 \
+-t 'oan/control/1.5m/ruca2/nombres' -v -C 1
+
+Notas:
+
+- El primer archivo debe contener al menos 8 nombres de filtros.
+- ruca_rueda2.fil debe contener al menos 5 nombres de polarizadores.
+- El comando publica el mismo diccionario JSON que genera la interfaz RUCA.

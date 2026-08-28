@@ -53,7 +53,7 @@ import os
 import sys
 import paho.mqtt.client as mqtt
 import subprocess
-from threading import Thread
+from threading import Event, Thread
 import simplejson as json
 
 # MQTT IP
@@ -73,11 +73,22 @@ MQTT_ESTADO = "oan/control/1.5m/ruca2/estado"
 MQTT_NOMBRES = "oan/control/1.5m/ruca2/nombres"
 MQTT_CAMBIA_NOMBRES = "oan/control/1.5m/ruca2/cambianombres"
 
+mqtt_conectado = Event()
+client = None
+
 # MQTT on_connect
 def on_connect(client, user_data, flags, rc):
     print ("Resultado de conexion: " + str(rc))
-    client.subscribe(MQTT_TOPIC)
-    print ("Conectado a: " + MQTT_TOPIC)
+    if rc == 0:
+        mqtt_conectado.set()
+        client.subscribe(MQTT_TOPIC)
+        print ("Conectado a: " + MQTT_TOPIC)
+    else:
+        mqtt_conectado.clear()
+
+
+def on_disconnect(client, user_data, rc):
+    mqtt_conectado.clear()
 
 
 # MQTT on_message
@@ -352,13 +363,15 @@ def on_message(client, user_data, msg):
             cambio.kill()
             print ("[+] CAMBIA NOMBRES EN RUCA2 OK")
             print(salida_json)
-        except:
-            print ("[-] ERROR CAMBIANDO NOMBRES EN RUCA2")
+        except (OSError, UnicodeError, ValueError, KeyError, TypeError):
             pass
         publicanombres()
 
 
 def publicaestado():
+    if not mqtt_conectado.is_set():
+        return
+
     estado = subprocess.Popen(RUCA_IP, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr = subprocess.PIPE)
     estado1 = estado.communicate(str.encode("ESTADO"))[0]  #regresa un tuple [0,1]
     print ("[+] SOLICITANDO VARIABLES ESTADO RUCA2")
@@ -401,11 +414,15 @@ def publicaestado():
         }
     msg_json = json.dumps(msg, separators=(',', ':'), sort_keys=True) #data serialized
     #print(msg_json)
-    client.publish(MQTT_ESTADO, msg_json, retain=True)
-    print ("[+] STATUS DE VARIABLES ENVIADO OK")
+    if mqtt_conectado.is_set():
+        client.publish(MQTT_ESTADO, msg_json, retain=True)
+        print ("[+] STATUS DE VARIABLES ENVIADO OK")
 
 
 def publicanombres():
+    if not mqtt_conectado.is_set():
+        return
+
     nombres = subprocess.Popen(RUCA_IP, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr = subprocess.PIPE)
     nombres1 = nombres.communicate(str.encode("NOMBRE"))[0]  #regresa un tuple [0,1]
     print ("[+] SOLICITANDO NOMBRES FILTROS RUCA2")
@@ -434,8 +451,9 @@ def publicanombres():
         }
     msg_json = json.dumps(msg, separators=(',', ':'), sort_keys=True) #data serialized
     #print(msg_json)
-    client.publish(MQTT_NOMBRES, msg_json, retain=True)
-    print ("[+] NAMES ENVIADOS OK")
+    if mqtt_conectado.is_set():
+        client.publish(MQTT_NOMBRES, msg_json, retain=True)
+        print ("[+] NAMES ENVIADOS OK")
 
 
 #Loop que publica los datos de estado en el broker MQTT
@@ -448,31 +466,40 @@ class MQTTLOOP(Thread):
         while True :
             try:
                 publicaestado()
-            except:
+            except (OSError, UnicodeError, ValueError, KeyError, TypeError):
                 pass
             time.sleep(20) #actualiza el estado en MQTT cada 20 segundos
             try:
                 publicanombres()
-            except:
+            except (OSError, UnicodeError, ValueError, KeyError, TypeError):
                 pass
             time.sleep(20) #actualiza el estado en MQTT cada 20 segundos
 
-# Programa Principal
-try:
+def crea_cliente_mqtt():
+    cliente = mqtt.Client()
+    cliente.on_connect = on_connect
+    cliente.on_disconnect = on_disconnect
+    cliente.on_message = on_message
+    cliente.reconnect_delay_set(min_delay=1, max_delay=30)
+    cliente.connect_async(MQTT_HOST, 1883, 60)
+    return cliente
+
+
+def main():
+    global client
+
     print ("[+] INTERPRETE MQTT DE LA RUCA 2.0 Iniciado! Presione CTRL+C para Salir")
-    client = mqtt.Client()
-    client.connect(MQTT_HOST, 1883, 60)
-    client.on_connect = on_connect
-    client.on_message = on_message
-    #client.loop_start()
+    client = crea_cliente_mqtt()
 
     MQTTloop = MQTTLOOP()
-    MQTTloop.setDaemon(True)
+    MQTTloop.daemon = True
     MQTTloop.start()
-    client.loop_forever()
+    try:
+        client.loop_forever(retry_first_connection=True)
+    except (KeyboardInterrupt, SystemExit): # If CTRL+C is pressed, exit cleanly:
+        client.disconnect()
+        print("Adios Viajero")
 
 
-except (KeyboardInterrupt, SystemExit): # If CTRL+C is pressed, exit cleanly:
-    print("Adios Viajero")
-    client.loop_stop()
-    sys.exit()
+if __name__ == "__main__":
+    main()

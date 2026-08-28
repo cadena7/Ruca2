@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - RUEDA DE FILTROS
-Version 2.2-dev          5/Junio/2026
+Version 2.5-dev          21/Agosto/2026
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -28,24 +28,30 @@ REDUCTOR (1-3): mete el reductor azul (1) o reductor rojo (2) y lo saca (3)
 RUEDA (1-8): va hacia el número de filtro indicado
 POLARIZA (1-5): va hacia el número de polarizador indicado
 ESTADO: devuelve el estado de las variables en formato json
-INICIO: busca inicio de los motores de paso
+INICIO o INIT: busca inicio de los motores de paso
 SPEED: ajusta velocidad de giro del motor de paso en RPM
 STOP: detiene los movimientos y bloquea la rueda, para recuperar ejecutar el comando INICIO
 FRENOS: libera o mete frenos energizando los solenoides
+FRENO_RUEDA_CONFIG: consulta o modifica el uso del freno y su sensor
 
 Ejemplos:
 echo RUEDA 2 | nc 192.168.0.34 6666
 echo REDUCTOR 3 | nc 192.168.0.34 6666
 echo ESTADO | nc 192.168.0.34 6666
 echo INICIO | nc 192.168.0.34 6666
+echo INIT | nc 192.168.0.34 6666
 echo NOMBRE | nc 192.168.0.34 6666
 echo SPEED 80 | nc 192.168.0.34 6666
 echo MUEVE 1 100 1 | nc 192.168.0.34 6666           #(echo MUEVE MOTOR(1-2-3) #STEPS DIR(1/0) | nc ip 6666)
 echo STOP | nc 192.168.0.34 6666
 echo FRENOS 0 | nc 192.168.0.34 6666        #libera frenos
+echo FRENO_RUEDA_CONFIG 1 0 | nc 192.168.0.34 6666
 
 Funciones Añadidas:
 
+Ver. 2.5 - Se corrigio STOP para interrumpir inmediatamente inicializacion y movimientos sin reactivar los motores
+Ver. 2.4 - Se agrego comando socket para consultar y modificar el bypass del freno de rueda durante la ejecucion
+Ver. 2.3 - Se agrego bypass temporal configurable para accionar o ignorar el freno y sensor de freno de la rueda
 Ver. 2.2 - Se agrego lock global para rechazar comandos concurrentes de movimiento e inicializacion cuando la RUCA esta ocupada
 Ver. 2.1 - Se agrego control por botones GPIO B_START, B_STOP, B_UP y B_DOWN usando socket local y se añadieron sus variables al estado JSON
 Ver. 2.0 - Fix memory leak de threads en sockets
@@ -77,7 +83,7 @@ import time
 import atexit
 import os
 import sys
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 import random
 import socket
 import subprocess
@@ -139,10 +145,19 @@ TCP_PORT = 6666
 BUFFER_SIZE = 2048  # Usually 1024, but we need quick response
 RUCA_LOCAL = "nc localhost 6666"
 B_START_LOCK = Lock()
+B_START_CANCEL_EVENT = Event()
 B_STOP_LOCK = Lock()
 B_MOVE_LOCK = Lock()
 COMANDO_MOV_LOCK = Lock()
-COMANDOS_MOVIMIENTO = ('REDUCTOR', 'RUEDA', 'POLARIZA', 'MUEVE', 'FRENOS', 'INICIO')
+MOTOR_IO_LOCK = Lock()
+STOP_STATE_LOCK = Lock()
+STOP_GENERATION = 0
+COMANDOS_MOVIMIENTO = ('REDUCTOR', 'RUEDA', 'POLARIZA', 'MUEVE', 'FRENOS', 'INICIO', 'INIT')
+# Bypass temporal del freno de rueda:
+# Normal: USAR_FRENO_RUEDA=1 y USAR_SENSOR_FRENO_RUEDA=1
+# Microswitch fallando: USAR_FRENO_RUEDA=1 y USAR_SENSOR_FRENO_RUEDA=0
+USAR_FRENO_RUEDA = 1
+USAR_SENSOR_FRENO_RUEDA = 1
 
 # create an INET, STREAMing socket
 tcpServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -169,26 +184,105 @@ REDUCTOR_MOTOR.setSpeed(200)                        # 200 RPM
 
 # recommended for auto-disabling motors on shutdown!
 def turnOffMotors():
-    tophat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
-    tophat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
-    tophat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
-    tophat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
-    bottomhat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
-    bottomhat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
-    bottomhat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
-    bottomhat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
+    with MOTOR_IO_LOCK:
+        tophat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
+        tophat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+        tophat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
+        tophat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
+        bottomhat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
+        bottomhat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+        bottomhat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
+        bottomhat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
 
 def turnOffRueda():
-    bottomhat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
-    bottomhat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+    with MOTOR_IO_LOCK:
+        bottomhat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
+        bottomhat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+
+def abreFrenoRueda():
+    if USAR_FRENO_RUEDA == 1:
+        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+
+def cierraFrenoRueda():
+    if USAR_FRENO_RUEDA == 1:
+        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+
+def activaFrenoRueda():
+    cierraFrenoRueda()
+
+def desactivaFrenoRueda():
+    abreFrenoRueda()
+
+def frenoRuedaNoAbrio():
+    return USAR_SENSOR_FRENO_RUEDA == 1 and variables.RUEDA_FRENO_SENSOR == 1
 
 def turnOffPolariza():
-    tophat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
-    tophat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
+    with MOTOR_IO_LOCK:
+        tophat.getMotor(3).run(Adafruit_MotorHAT.RELEASE)
+        tophat.getMotor(4).run(Adafruit_MotorHAT.RELEASE)
 
 def turnOffReductor():
-    tophat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
-    tophat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+    with MOTOR_IO_LOCK:
+        tophat.getMotor(1).run(Adafruit_MotorHAT.RELEASE)
+        tophat.getMotor(2).run(Adafruit_MotorHAT.RELEASE)
+
+def pasoMotor(motor, pasos, direccion, estilo):
+    if paroEmergenciaSolicitado():
+        return False
+    with MOTOR_IO_LOCK:
+        if paroEmergenciaSolicitado():
+            return False
+        motor.step(pasos, direccion, estilo)
+    return True
+
+def muevePasosInterrumpible(motor, pasos, direccion, estilo):
+    pasos_movidos = 0
+    while pasos_movidos < pasos:
+        if paroEmergenciaSolicitado():
+            abortaSiParoEmergencia()
+            return pasos_movidos, False
+        if not pasoMotor(motor, 1, direccion, estilo):
+            abortaSiParoEmergencia()
+            return pasos_movidos, False
+        pasos_movidos += 1
+    return pasos_movidos, True
+
+def paroEmergenciaSolicitado():
+    return variables.RUEDA_STOP == 1
+
+def generacionParoEmergencia():
+    with STOP_STATE_LOCK:
+        return STOP_GENERATION
+
+def registraParoEmergencia():
+    global STOP_GENERATION
+    with STOP_STATE_LOCK:
+        STOP_GENERATION += 1
+        variables.RUEDA_STOP = 1
+
+def preparaInicio(generacion_al_recibir):
+    with STOP_STATE_LOCK:
+        if STOP_GENERATION != generacion_al_recibir:
+            return False
+        variables.RUEDA_STOP = 0
+        return True
+
+def marcaMovimientoInterrumpido():
+    variables.FIRST_INIT_RUEDA = 0
+    variables.FIRST_INIT_POLARIZA = 0
+    variables.FIRST_INIT_REDUCTOR = 0
+    variables.RUEDA_ESTADO = "ERROR: PARO DE EMERGENCIA"
+    print ("[+] MOVIMIENTO INTERRUMPIDO POR PARO DE EMERGENCIA")
+
+def abortaSiParoEmergencia():
+    if not paroEmergenciaSolicitado():
+        return False
+    turnOffMotors()
+    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+    GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
+    GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.LOW)
+    marcaMovimientoInterrumpido()
+    return True
 
 
 # recommended for auto-disabling motors on shutdown!
@@ -203,18 +297,24 @@ def FirstinitPos():
     polarizacompletado = 1
     ruedapasosextra = 0
     polarizapasosextra = 0
-    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+    if abortaSiParoEmergencia():
+        return False
+    desactivaFrenoRueda()
     print ("[+] RUEDA: FRENO OFF")
     time.sleep(1.0)
+    if abortaSiParoEmergencia():
+        return False
     print ("[+] INICIANDO Rueda de Filtros")
     variables.RUEDA_ESTADO = "Iniciando RUCA"
     ruedatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
     while variables.FIRST_INIT_RUEDA != 1:
-        RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.DOUBLE)
+        if abortaSiParoEmergencia():
+            return False
+        pasoMotor(RUEDA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
         variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
-        if variables.RUEDA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+        if frenoRuedaNoAbrio():   # Se agrego protección por el nuevo sistema de freno mecánico
             turnOffRueda()
-            GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+            activaFrenoRueda()
             print ("[+] ERROR: FRENO NO SE DESACTIVO -- RUEDA: FRENO ON")
             ruedacompletado = -1
             break
@@ -225,7 +325,9 @@ def FirstinitPos():
         #time.sleep(0.05)
     turnOffRueda()      # Busca posicion de freno correcta
     time.sleep(0.50)
-    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+    if abortaSiParoEmergencia():
+        return False
+    activaFrenoRueda()
     print ("[+] RUEDA: FRENO ON")
     '''
     time.sleep(1.0)
@@ -236,7 +338,7 @@ def FirstinitPos():
         if variables.RUEDA_FRENO_SENSOR == 0:
             GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
             time.sleep(1.0)
-            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+            pasoMotor(RUEDA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
             variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
             GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
             print ("[+] RUEDA: PASO EXTRA")
@@ -272,7 +374,7 @@ def FirstinitPos():
     print ("[+] INICIANDO Rueda de Polarizadores")
     polarizatimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
     while variables.FIRST_INIT_POLARIZA != 1:
-        POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.DOUBLE)
+        pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
         #POLARIZA_MOTOR.oneStep(Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.SINGLE)
         variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
         if variables.POLARIZA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
@@ -299,7 +401,7 @@ def FirstinitPos():
             GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
             #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
             time.sleep(1.0)
-            POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+            pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
             variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
             GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
             #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
@@ -326,13 +428,19 @@ def FirstinitPos():
         print ("[+] ERROR: FRENO POLARIZA NO LLEGO A SU POSICION")
     '''
 
+    if abortaSiParoEmergencia():
+        return False
     GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.HIGH)
     time.sleep(1.0)
+    if abortaSiParoEmergencia():
+        return False
     print ("[+] INICIANDO Reductor Rojo")
     variables.RUEDA_ESTADO = "Iniciando Reductores"
     reductimeout = time.time() + 60*1.00   # 1 minuto desde el inicio
     while variables.FIRST_INIT_REDUCTOR != 1:      #switch normalmente abierto, mover el motor hasta activar el bit accionando el switch n.o.
-        REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+        if abortaSiParoEmergencia():
+            return False
+        pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
         variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - 10
         if time.time() >= reductimeout:
             print ("[+] REDUCTOR: TIMEOUT")
@@ -342,6 +450,8 @@ def FirstinitPos():
         #time.sleep(0.05)
     turnOffReductor()
     time.sleep(0.50)
+    if abortaSiParoEmergencia():
+        return False
     GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.LOW)
     if reduccompletado == 1:
         variables.RUEDA_ESTADO = "REDUCTOR INICIALIZADO"
@@ -353,6 +463,7 @@ def FirstinitPos():
     if reduccompletado == 1 and ruedacompletado == 1:
         variables.RUEDA_ESTADO = "LISTO"
     time.sleep(0.30)
+    return not paroEmergenciaSolicitado()
 
 
 # Envia a posiciones de inicio las ruedas de filtros
@@ -364,13 +475,18 @@ def initPos():
     variables.RUEDA_INDICE_SET = 0
     #variables.POLARIZA_INDICE_SET = 0
     variables.REDUCTOR_SET = 0
-    variables.RUEDA_STOP = 0
     time.sleep(0.30)
+    if abortaSiParoEmergencia():
+        return False
     principal = Principal()
     principal.initStatus()
     time.sleep(0.30)
-    FirstinitPos()
+    if abortaSiParoEmergencia():
+        return False
+    if not FirstinitPos():
+        return False
     print ("[+] Inicializada Rueda de Filtros OK")
+    return True
 
 
 def mandaComandoLocal(comando):
@@ -390,6 +506,9 @@ def ejecutaBStart():
     try:
         print ("[+] B_START solicitando STOP")
         mandaComandoLocal("STOP")
+        if B_START_CANCEL_EVENT.is_set():
+            print ("[+] B_START cancelado por B_STOP antes de INICIO")
+            return
         print ("[+] B_START solicitando INICIO")
         mandaComandoLocal("INICIO")
     finally:
@@ -401,6 +520,7 @@ def ejecutaBStop():
         print ("[+] B_STOP ignorado: STOP en proceso")
         return
     try:
+        abortaSiParoEmergencia()
         print ("[+] B_STOP solicitando STOP")
         mandaComandoLocal("STOP")
     finally:
@@ -431,7 +551,7 @@ def ejecutaBMove(delta):
 #Clase Principal
 class Principal():
     def __init__(self):
-        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+        activaFrenoRueda()
         #RUEDA_FRENO_OUT_PWM.start(0)
         GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
         #POLARIZA_FRENO_OUT_PWM.start(0)
@@ -586,6 +706,8 @@ class Principal():
         time.sleep(0.005) # debounce for 5mSec
         if GPIO.input(B_START_PIN):
             variables.B_START = 1
+            if not B_START_LOCK.locked():
+                B_START_CANCEL_EVENT.clear()
             print (">>rising edge detected on B_START_PIN>>")
             print ("B_START = " + str(variables.B_START))
             threadBotonStart = Thread(target=ejecutaBStart)
@@ -601,6 +723,9 @@ class Principal():
         time.sleep(0.005) # debounce for 5mSec
         if GPIO.input(B_STOP_PIN):
             variables.B_STOP = 1
+            B_START_CANCEL_EVENT.set()
+            registraParoEmergencia()
+            marcaMovimientoInterrumpido()
             print (">>rising edge detected on B_STOP_PIN>>")
             print ("B_STOP = " + str(variables.B_STOP))
             threadBotonStop = Thread(target=ejecutaBStop)
@@ -780,7 +905,9 @@ class Principal():
                 'B_START': variables.B_START,
                 'B_STOP': variables.B_STOP,
                 'B_UP': variables.B_UP,
-                'B_DOWN': variables.B_DOWN
+                'B_DOWN': variables.B_DOWN,
+                'USAR_FRENO_RUEDA': USAR_FRENO_RUEDA,
+                'USAR_SENSOR_FRENO_RUEDA': USAR_SENSOR_FRENO_RUEDA
                 }
         estado_json = json.dumps(estado, separators=(',', ':'), sort_keys=True) #data serialized
         print ("[+] Estado inicial: ")
@@ -843,8 +970,12 @@ class ClientThread(Thread):
             print ("Comando Recibido: " + data)
             datasplit = data.split(' ')
             comando = datasplit[0]
+            inicio_stop_generation = None
+            if comando == 'INICIO' or comando == 'INIT':
+                inicio_stop_generation = generacionParoEmergencia()
             print (datasplit) # debug
-            if comando in COMANDOS_MOVIMIENTO:
+            modifica_config_freno = comando == 'FRENO_RUEDA_CONFIG' and len(datasplit) > 1
+            if comando in COMANDOS_MOVIMIENTO or modifica_config_freno:
                 if not COMANDO_MOV_LOCK.acquire(False):
                     print ("[+] ERROR: RUCA OCUPADA")
                     try:
@@ -872,7 +1003,7 @@ class ClientThread(Thread):
                     time.sleep(1.0)
 
                     while variables.REDUCTOR_AZUL != 1:     #switch normalmente abierto, mover el motor hasta activar el bit accionando el switch n.o.
-                        REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.FORWARD,  Adafruit_MotorHAT.DOUBLE)
+                        pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                         variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS + 10
                         variables.REDUCTOR_FUERA = 0
                         try:
@@ -893,7 +1024,7 @@ class ClientThread(Thread):
                     time.sleep(1.0)
 
                     while variables.REDUCTOR_ROJO != 1:     #switch normalmente abierto, mover el motor hasta activar el bit accionando el switch n.o.
-                        REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                        pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
                         variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - 10
                         variables.REDUCTOR_FUERA = 0
                         try:
@@ -916,7 +1047,7 @@ class ClientThread(Thread):
 
                         if variables.REDUCTOR_AZUL:
                             for i in range(0, 700):
-                                REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - 10
                                 variables.REDUCTOR_FUERA = 1
                                 variables.REDUCTOR_INDICE = 3
@@ -935,7 +1066,7 @@ class ClientThread(Thread):
 
                         elif variables.REDUCTOR_ROJO:
                             for i in range(0, 700):
-                                REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS + 10
                                 variables.REDUCTOR_FUERA = 1
                                 variables.REDUCTOR_INDICE = 3
@@ -954,7 +1085,7 @@ class ClientThread(Thread):
 
                         else:
                             while variables.REDUCTOR_ROJO != 1:      #switch normalmente abierto, mover el motor hasta activar el bit accionando el switch n.o.
-                                REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - 10
                                 try:
                                     self.conn.send(str.encode('-' + '\n'))  # echo
@@ -971,7 +1102,7 @@ class ClientThread(Thread):
 
                             time.sleep(0.2)
                             for i in range(0, 700):
-                                REDUCTOR_MOTOR.step(10, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(REDUCTOR_MOTOR, 10, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS + 10
                                 variables.REDUCTOR_FUERA = 1
                                 variables.REDUCTOR_INDICE = 3
@@ -1000,7 +1131,13 @@ class ClientThread(Thread):
                 turnOffReductor()
                 time.sleep(1.0)
                 GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.LOW)
-                if self.completado == 1:
+                if paroEmergenciaSolicitado():
+                    marcaMovimientoInterrumpido()
+                    try:
+                        self.conn.send(str.encode('ERROR: -- MOVIMIENTO INTERRUMPIDO POR STOP -- ' + data + '\n'))
+                    except BrokenPipeError as e:
+                        pass
+                elif self.completado == 1:
                     try:
                         self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
                     except BrokenPipeError as e:
@@ -1039,12 +1176,12 @@ class ClientThread(Thread):
                         self.conn.close()
                         break
                     variables.RUEDA_ESTADO = "MOVIENDO"
-                    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                    desactivaFrenoRueda()
                     time.sleep(1.0)
                     print ("[+] RUEDA: FRENO OFF")
-                    if variables.RUEDA_FRENO_SENSOR == 1:   # Se agrego protección por el nuevo sistema de freno mecánico
+                    if frenoRuedaNoAbrio():   # Se agrego protección por el nuevo sistema de freno mecánico
                         turnOffRueda()
-                        GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                        activaFrenoRueda()
                         print ("[+] ERROR: FRENO NO SE DESACTIVO -- RUEDA: FRENO ON")
                         variables.RUEDA_ESTADO = "ERROR: FRENO NO ABRIO"
                         try:
@@ -1055,7 +1192,10 @@ class ClientThread(Thread):
                         break
                     variables.RUEDA_SENTIDO = 1      #suma contador, ver interrupciones
                     while variables.RUEDA_INDICE != variables.RUEDA_INDICE_SET:
-                        RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                        if paroEmergenciaSolicitado():
+                            self.completado = 0
+                            break
+                        pasoMotor(RUEDA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                         variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
                         if time.time() >= self.ruedatimeout:
                             print ("[+] RUEDA: TIMEOUT")
@@ -1066,7 +1206,6 @@ class ClientThread(Thread):
                             self.completado = 0
                             break
                     turnOffRueda()      # Busca posicion de freno correcta
-                    self.completado = 1
                     '''
                     time.sleep(1.0)
 
@@ -1077,7 +1216,7 @@ class ClientThread(Thread):
                             GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
                             #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
                             time.sleep(1.0)
-                            RUEDA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                            pasoMotor(RUEDA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                             variables.RUEDA_PASOS = variables.RUEDA_PASOS + 1
                             GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
                             #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
@@ -1103,9 +1242,15 @@ class ClientThread(Thread):
                     '''
                     turnOffRueda()
                     time.sleep(0.50)
-                    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                    activaFrenoRueda()
                     print ("[+] RUEDA: FRENO ON")
-                    if self.completado == 1:
+                    if paroEmergenciaSolicitado():
+                        marcaMovimientoInterrumpido()
+                        try:
+                            self.conn.send(str.encode('ERROR: -- MOVIMIENTO INTERRUMPIDO POR STOP -- ' + data + '\n'))
+                        except BrokenPipeError as e:
+                            pass
+                    elif self.completado == 1:
                         variables.RUEDA_ESTADO = "LISTO"
                         try:
                             self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
@@ -1173,7 +1318,7 @@ class ClientThread(Thread):
                             break
                         variables.POLARIZA_SENTIDO = 1      #suma contador, ver interrupciones
                         while variables.POLARIZA_INDICE != variables.POLARIZA_INDICE_SET:
-                            POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                            pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                             variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
                             try:
                                 self.conn.send(str.encode('+' + '\n'))  # echo
@@ -1199,7 +1344,7 @@ class ClientThread(Thread):
                                 GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
                                 #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
                                 time.sleep(1.0)
-                                POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
                                 GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
                                 #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
@@ -1240,7 +1385,7 @@ class ClientThread(Thread):
                             break
                         variables.POLARIZA_SENTIDO = 0      #resta contador, ver interrupciones
                         while variables.POLARIZA_INDICE != variables.POLARIZA_INDICE_SET:
-                            POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
+                            pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
                             variables.POLARIZA_PASOS = variables.POLARIZA_PASOS - 1
                             try:
                                 self.conn.send(str.encode('-' + '\n'))  # echo
@@ -1255,15 +1400,20 @@ class ClientThread(Thread):
                                 self.completado = 0
                                 break
                         time.sleep(1.0)
-                        POLARIZA_MOTOR.step(80, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE)
-                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS - 80
-                        variables.POLARIZA_INDICE = variables.POLARIZA_INDICE - 1     #resta un contador para regresar en un mismo sentido siempre
-                        print (">>Restado 1 en POLARIZA_INDICE_PIN para Compensar>>")
-                        print ("POLARIZA_INDICE = " + str(variables.POLARIZA_INDICE))
+                        pasos_compensacion, compensacion_completada = muevePasosInterrumpible(
+                            POLARIZA_MOTOR, 80, Adafruit_MotorHAT.BACKWARD, Adafruit_MotorHAT.DOUBLE
+                        )
+                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS - pasos_compensacion
+                        if compensacion_completada:
+                            variables.POLARIZA_INDICE = variables.POLARIZA_INDICE - 1     #resta un contador para regresar en un mismo sentido siempre
+                            print (">>Restado 1 en POLARIZA_INDICE_PIN para Compensar>>")
+                            print ("POLARIZA_INDICE = " + str(variables.POLARIZA_INDICE))
+                        else:
+                            self.completado = 0
                         variables.POLARIZA_SENTIDO = 1      #suma contador, ver interrupciones
                         time.sleep(1.0)
                         while variables.POLARIZA_INDICE != variables.POLARIZA_INDICE_SET:
-                            POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                            pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                             variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
                             try:
                                 self.conn.send(str.encode('+' + '\n'))  # echo
@@ -1289,7 +1439,7 @@ class ClientThread(Thread):
                                 GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
                                 #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
                                 time.sleep(1.0)
-                                POLARIZA_MOTOR.step(1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
+                                pasoMotor(POLARIZA_MOTOR, 1, Adafruit_MotorHAT.FORWARD, Adafruit_MotorHAT.DOUBLE)
                                 variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + 1
                                 GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
                                 #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
@@ -1318,7 +1468,13 @@ class ClientThread(Thread):
                     GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
                     #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(0)
                     print ("[+] POLARIZA: FRENO ON")
-                    if self.completado == 1:
+                    if paroEmergenciaSolicitado():
+                        marcaMovimientoInterrumpido()
+                        try:
+                            self.conn.send(str.encode('ERROR: -- MOVIMIENTO INTERRUMPIDO POR STOP -- ' + data + '\n'))
+                        except BrokenPipeError as e:
+                            pass
+                    elif self.completado == 1:
                         try:
                             self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
                         except BrokenPipeError as e:
@@ -1350,9 +1506,18 @@ class ClientThread(Thread):
 
 
             elif comando == 'MUEVE':        #EJEMPLO: echo MUEVE MOTOR(1-2-3) #STEPS DIR(1/0) | nc ip 6666
+                if paroEmergenciaSolicitado():
+                    try:
+                        self.conn.send(str.encode('ERROR: -- PARO DE EMERGENCIA ACTIVO -- ' + data + '\n'))
+                    except BrokenPipeError as e:
+                        pass
+                    self.conn.close()
+                    break
                 motor = int(datasplit[1])
                 pasos = int(datasplit[2])
                 sentido = int(datasplit[3])
+                pasos_movidos = 0
+                movimiento_completado = True
 
                 if sentido == 1:
                     direccion = Adafruit_MotorHAT.FORWARD
@@ -1367,28 +1532,32 @@ class ClientThread(Thread):
                     break
 
                 if motor == 1:
-                    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.HIGH)
+                    desactivaFrenoRueda()
                     #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(100)
                     time.sleep(1.0)
-                    RUEDA_MOTOR.step(pasos, direccion, Adafruit_MotorHAT.DOUBLE)
+                    pasos_movidos, movimiento_completado = muevePasosInterrumpible(
+                        RUEDA_MOTOR, pasos, direccion, Adafruit_MotorHAT.DOUBLE
+                    )
                     if sentido == 1:
-                        variables.RUEDA_PASOS = variables.RUEDA_PASOS + pasos
+                        variables.RUEDA_PASOS = variables.RUEDA_PASOS + pasos_movidos
                     else:
-                        variables.RUEDA_PASOS = variables.RUEDA_PASOS - pasos
+                        variables.RUEDA_PASOS = variables.RUEDA_PASOS - pasos_movidos
                     turnOffRueda()
                     time.sleep(1.0)
-                    GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
+                    activaFrenoRueda()
                     #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
 
                 elif motor == 2:
                     GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.HIGH)
                     #POLARIZA_FRENO_OUT_PWM.ChangeDutyCycle(100)
                     time.sleep(1.0)
-                    POLARIZA_MOTOR.step(pasos, direccion, Adafruit_MotorHAT.DOUBLE)
+                    pasos_movidos, movimiento_completado = muevePasosInterrumpible(
+                        POLARIZA_MOTOR, pasos, direccion, Adafruit_MotorHAT.DOUBLE
+                    )
                     if sentido == 1:
-                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + pasos
+                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS + pasos_movidos
                     else:
-                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS - pasos
+                        variables.POLARIZA_PASOS = variables.POLARIZA_PASOS - pasos_movidos
                     turnOffPolariza()
                     time.sleep(1.0)
                     GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
@@ -1397,11 +1566,13 @@ class ClientThread(Thread):
                 elif motor == 3:
                     GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.HIGH)
                     time.sleep(1.0)
-                    REDUCTOR_MOTOR.step(pasos, direccion, Adafruit_MotorHAT.DOUBLE)
+                    pasos_movidos, movimiento_completado = muevePasosInterrumpible(
+                        REDUCTOR_MOTOR, pasos, direccion, Adafruit_MotorHAT.DOUBLE
+                    )
                     if sentido == 1:
-                        variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS + pasos
+                        variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS + pasos_movidos
                     else:
-                        variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - pasos
+                        variables.REDUCTOR_PASOS = variables.REDUCTOR_PASOS - pasos_movidos
                     turnOffReductor()
                     time.sleep(1.0)
                     GPIO.output(REDUCTOR_FRENO_OUT_PIN, GPIO.LOW)
@@ -1414,7 +1585,10 @@ class ClientThread(Thread):
                     self.conn.close()
                     break
                 try:
-                    self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
+                    if movimiento_completado:
+                        self.conn.send(str.encode('OK: ' + data + '\n'))
+                    else:
+                        self.conn.send(str.encode('ERROR: -- MOVIMIENTO INTERRUMPIDO POR STOP -- ' + data + '\n'))
                 except BrokenPipeError as e:
                     pass
                 self.conn.close()
@@ -1423,12 +1597,9 @@ class ClientThread(Thread):
 
             #Emergency Stop
             elif comando == 'STOP':
-                variables.RUEDA_STOP = 1
-                variables.FIRST_INIT_RUEDA = 0
-                variables.FIRST_INIT_POLARIZA = 0
-                variables.FIRST_INIT_REDUCTOR = 0
+                registraParoEmergencia()
+                marcaMovimientoInterrumpido()
                 turnOffMotors()
-                time.sleep(1.0)
                 GPIO.output(RUEDA_FRENO_OUT_PIN, GPIO.LOW)
                 #RUEDA_FRENO_OUT_PWM.ChangeDutyCycle(0)
                 GPIO.output(POLARIZA_FRENO_OUT_PIN, GPIO.LOW)
@@ -1474,18 +1645,50 @@ class ClientThread(Thread):
                 break
 
 
-            elif comando == 'INICIO':       #VA A INICIO DE POSICION
-                variables.RUEDA_ESTADO = "Iniciando RUCA"
-                initPos()
+            elif comando == 'FRENO_RUEDA_CONFIG':
+                if len(datasplit) == 1:
+                    config_freno = {
+                        'USAR_FRENO_RUEDA': USAR_FRENO_RUEDA,
+                        'USAR_SENSOR_FRENO_RUEDA': USAR_SENSOR_FRENO_RUEDA
+                        }
+                    respuesta = json.dumps(config_freno, separators=(',', ':'), sort_keys=True)
+                elif len(datasplit) == 3 and datasplit[1] in ('0', '1') and datasplit[2] in ('0', '1'):
+                    globals()['USAR_FRENO_RUEDA'] = int(datasplit[1])
+                    globals()['USAR_SENSOR_FRENO_RUEDA'] = int(datasplit[2])
+                    respuesta = 'OK: FRENO_RUEDA_CONFIG ' + datasplit[1] + ' ' + datasplit[2]
+                    print ("[+] " + respuesta)
+                else:
+                    respuesta = 'ERROR: -- USO: FRENO_RUEDA_CONFIG [0/1 0/1] -- ' + data
+
                 try:
-                    self.conn.send(str.encode('OK: ' + data + '\n'))  # echo
+                    self.conn.send(str.encode(respuesta + '\n'))
                 except BrokenPipeError as e:
                     pass
                 self.conn.close()
                 break
 
 
-            elif comando == 'ESTADO':     #REGRESA Estado ACTUAL
+            elif comando == 'INICIO' or comando == 'INIT':       #VA A INICIO DE POSICION
+                # INICIO limpia un paro anterior; cualquier STOP posterior vuelve
+                # a poner la bandera y es detectado por las rutinas de movimiento.
+                if preparaInicio(inicio_stop_generation):
+                    variables.RUEDA_ESTADO = "Iniciando RUCA"
+                    inicio_completado = initPos()
+                else:
+                    marcaMovimientoInterrumpido()
+                    inicio_completado = False
+                try:
+                    if inicio_completado:
+                        self.conn.send(str.encode('OK: ' + data + '\n'))
+                    else:
+                        self.conn.send(str.encode('ERROR: -- INICIO INTERRUMPIDO POR STOP -- ' + data + '\n'))
+                except BrokenPipeError as e:
+                    pass
+                self.conn.close()
+                break
+
+
+            elif comando == 'ESTADO' or comando == 'STATUS':     #REGRESA Estado ACTUAL
                 variables.RUEDA_FRENO = GPIO.input(RUEDA_FRENO_OUT_PIN)
                 variables.POLARIZA_FRENO = GPIO.input(POLARIZA_FRENO_OUT_PIN)
                 variables.REDUCTOR_FRENO = GPIO.input(REDUCTOR_FRENO_OUT_PIN)
@@ -1527,7 +1730,9 @@ class ClientThread(Thread):
                     'B_START': variables.B_START,
                     'B_STOP': variables.B_STOP,
                     'B_UP': variables.B_UP,
-                    'B_DOWN': variables.B_DOWN
+                    'B_DOWN': variables.B_DOWN,
+                    'USAR_FRENO_RUEDA': USAR_FRENO_RUEDA,
+                    'USAR_SENSOR_FRENO_RUEDA': USAR_SENSOR_FRENO_RUEDA
                     }
                 estado_json = json.dumps(estado, separators=(',', ':'), sort_keys=True) #data serialized
 

@@ -2,7 +2,7 @@
 
 '''
 RUCA 2.0 - INTERFAZ WEB DE USUARIO
-Version 0.7-dev          4/Junio/2026
+Version 0.8-dev          13/Agosto/2026
 Edgar Omar Cadena Zepeda
 IA-UNAM-ENS
 cadena@astro.unam.mx
@@ -25,6 +25,7 @@ basado en una microcomputadora de la línea Raspberry Pi 3 modelo B.
 
 Funciones Añadidas:
 
+Ver. 0.8 - Se agrego control web para configurar el bypass del freno y sensor de la rueda
 Ver. 0.7 - Se agregaron las variables B_START, B_STOP, B_UP y B_DOWN a la lectura y visualizacion del estado
 Ver. 0.6 - Se agregaron variables RUEDA_SWITCH y RUEDA_SPEED
 Ver. 0.5 - Se agrego bandera de paro de emergencia
@@ -124,11 +125,14 @@ def inicio():
     B_STOP = estadojson2['B_STOP']                                   #27
     B_UP = estadojson2['B_UP']                                       #28
     B_DOWN = estadojson2['B_DOWN']                                   #29
+    USAR_FRENO_RUEDA = estadojson2['USAR_FRENO_RUEDA']               #30
+    USAR_SENSOR_FRENO_RUEDA = estadojson2['USAR_SENSOR_FRENO_RUEDA'] #31
 
     TablaEstadoRueda = [RUEDA_INICIO, RUEDA_INDICE, POLARIZA_INICIO, POLARIZA_INDICE, REDUCTOR_AZUL, REDUCTOR_ROJO, REDUCTOR_FUERA, RUEDA_FRENO, POLARIZA_FRENO,
                         REDUCTOR_FRENO, RUEDA_INDICE_SET, POLARIZA_INDICE_SET, REDUCTOR_SET, RUEDA_PASOS, POLARIZA_PASOS, REDUCTOR_PASOS, FIRST_INIT_RUEDA,
                         FIRST_INIT_POLARIZA, FIRST_INIT_REDUCTOR, RUEDA_FRENO_SENSOR, POLARIZA_FRENO_SENSOR, REDUCTOR_INDICE, RUEDA_PARO_EMERGENCIA,
-                        RUEDA_SWITCH, RUEDA_SPEED, RUEDA_ESTADO, B_START, B_STOP, B_UP, B_DOWN]
+                        RUEDA_SWITCH, RUEDA_SPEED, RUEDA_ESTADO, B_START, B_STOP, B_UP, B_DOWN, USAR_FRENO_RUEDA,
+                        USAR_SENSOR_FRENO_RUEDA]
     '''
     estado2 = subprocess.Popen("nc localhost 7777", shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr = subprocess.PIPE)
     estado3 = estado2.communicate(str.encode("ESTADO"))[0]  #regresa un tuple [0,1]
@@ -372,6 +376,21 @@ def stoprueda():
         stoprueda.kill()
         print ("[+] STOP RUEDA OK")
         return redirect(url_for('inicio'))
+
+
+@app.route("/configfrenorueda", methods=["POST"])
+def configfrenorueda():
+    usar_freno = '1' if request.form.get('usar_freno_rueda') == '1' else '0'
+    usar_sensor = '1' if request.form.get('usar_sensor_freno_rueda') == '1' else '0'
+    comando = "FRENO_RUEDA_CONFIG " + usar_freno + " " + usar_sensor
+    proceso = subprocess.Popen("nc localhost 6666", shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    respuesta, error = proceso.communicate(str.encode(comando))
+    proceso.kill()
+    print ("[+] " + comando)
+    print (respuesta.decode('utf-8').strip())
+    if error:
+        print (error.decode('utf-8').strip())
+    return redirect(url_for('inicio') + '#estado')
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=8000)
