@@ -3,7 +3,7 @@
 Interfaz gráfica de escritorio para operar y diagnosticar la rueda de filtros
 RUCA2. Está desarrollada en Python 3, GTK 3 y Glade.
 
-La versión actual de la interfaz es **2.3**.
+La versión actual de la interfaz es **2.4**.
 
 ## Arquitectura
 
@@ -131,6 +131,11 @@ Los botones afectan simultáneamente a rueda, polarizador y reductor:
 | Liberar frenos | `FRENOS 0` | Coloca las salidas en `HIGH` y libera. |
 
 Liberar los frenos requiere confirmación.
+
+El panel **Bypass temporal del freno de rueda** permite modificar las banderas
+del servidor con `FRENO_RUEDA_CONFIG <usar_freno> <usar_sensor>`. Los valores
+se sincronizan con `ESTADO`, se resaltan en el diagnóstico y cualquier bypass
+requiere confirmación antes de aplicarse.
 
 ### Movimiento manual
 

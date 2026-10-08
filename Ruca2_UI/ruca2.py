@@ -35,6 +35,8 @@ class MainApp():
         ("Frenos y sensores", (
             "RUEDA_FRENO",
             "RUEDA_FRENO_SENSOR",
+            "USAR_FRENO_RUEDA",
+            "USAR_SENSOR_FRENO_RUEDA",
             "POLARIZA_FRENO",
             "POLARIZA_FRENO_SENSOR",
             "REDUCTOR_FRENO",
@@ -163,6 +165,16 @@ class MainApp():
         self.engineering_move_steps = builder.get_object(
             "engineering_move_steps"
         )
+        self.engineering_use_wheel_brake = builder.get_object(
+            "engineering_use_wheel_brake"
+        )
+        self.engineering_use_wheel_brake_sensor = builder.get_object(
+            "engineering_use_wheel_brake_sensor"
+        )
+        self.engineering_brake_bypass_warning = builder.get_object(
+            "engineering_brake_bypass_warning"
+        )
+        self.engineering_brake_config = (True, True)
 
         self.engineering_state_model = Gtk.ListStore(
             str,
@@ -406,6 +418,38 @@ class MainApp():
 
 
     # =============================================
+    def on_engineering_brake_config_changed(self, switch, parameter):
+
+        self.update_engineering_brake_warning()
+
+
+    # =============================================
+    def on_engineering_apply_brake_config(self, button):
+
+        use_brake = int(self.engineering_use_wheel_brake.get_active())
+        use_sensor = int(
+            self.engineering_use_wheel_brake_sensor.get_active()
+        )
+
+        if use_brake == 1 and use_sensor == 1:
+            mode = "Operación normal: freno y microswitch habilitados."
+        elif use_brake == 1:
+            mode = "Bypass: el microswitch será ignorado."
+        else:
+            mode = "Bypass extremo: no se accionará el freno de rueda."
+
+        if self.confirm_action(
+            "Confirmar configuración del freno",
+            mode
+        ):
+            self.send_engineering_command(
+                f"FRENO_RUEDA_CONFIG {use_brake} {use_sensor}"
+            )
+        else:
+            self.restore_engineering_brake_config()
+
+
+    # =============================================
     def on_engineering_move(self, button):
 
         motor = self.engineering_move_motor.get_active_id()
@@ -515,6 +559,8 @@ class MainApp():
         else:
             self.engineering_controls.set_sensitive(True)
             self.set_direct_connection(False, "Error de comando")
+            if command.startswith("FRENO_RUEDA_CONFIG"):
+                self.restore_engineering_brake_config()
 
         return False
 
@@ -584,6 +630,7 @@ class MainApp():
             return False
 
         self.populate_engineering_state(state)
+        self.load_engineering_brake_config(state)
         now = datetime.datetime.now().strftime("%H:%M:%S")
         self.set_direct_connection(True, "Conectado")
         self.engineering_last_update.set_text(f"Última lectura: {now}")
@@ -664,6 +711,59 @@ class MainApp():
 
 
     # =============================================
+    def load_engineering_brake_config(self, state):
+
+        if (
+            "USAR_FRENO_RUEDA" not in state
+            or "USAR_SENSOR_FRENO_RUEDA" not in state
+        ):
+            return
+
+        self.engineering_brake_config = (
+            state["USAR_FRENO_RUEDA"] in (1, "1", True),
+            state["USAR_SENSOR_FRENO_RUEDA"] in (1, "1", True),
+        )
+        self.restore_engineering_brake_config()
+
+
+    # =============================================
+    def restore_engineering_brake_config(self):
+
+        use_brake, use_sensor = self.engineering_brake_config
+        self.engineering_use_wheel_brake.set_active(use_brake)
+        self.engineering_use_wheel_brake_sensor.set_active(use_sensor)
+        self.update_engineering_brake_warning()
+
+
+    # =============================================
+    def update_engineering_brake_warning(self):
+
+        use_brake = self.engineering_use_wheel_brake.get_active()
+        use_sensor = self.engineering_use_wheel_brake_sensor.get_active()
+
+        if use_brake and use_sensor:
+            self.engineering_brake_bypass_warning.set_text(
+                "Protecciones del freno habilitadas"
+            )
+            color = "darkgreen"
+        elif use_brake:
+            self.engineering_brake_bypass_warning.set_text(
+                "ADVERTENCIA: sensor del freno ignorado"
+            )
+            color = "darkorange"
+        else:
+            self.engineering_brake_bypass_warning.set_text(
+                "ADVERTENCIA: freno de rueda y validación deshabilitados"
+            )
+            color = "red"
+
+        self.engineering_brake_bypass_warning.modify_fg(
+            Gtk.StateFlags.NORMAL,
+            Gdk.color_parse(color)
+        )
+
+
+    # =============================================
     def get_engineering_value_style(self, variable, value):
 
         if variable in self.ENGINEERING_BLUE_VALUES:
@@ -688,6 +788,14 @@ class MainApp():
             if value in (1, "1", True):
                 return "#b06000", int(Pango.Weight.BOLD)
             return "#137333", int(Pango.Weight.NORMAL)
+
+        if variable in (
+            "USAR_FRENO_RUEDA",
+            "USAR_SENSOR_FRENO_RUEDA",
+        ):
+            if value in (1, "1", True):
+                return "#137333", int(Pango.Weight.BOLD)
+            return "#b00020", int(Pango.Weight.BOLD)
 
         return "#333333", int(Pango.Weight.NORMAL)
 
@@ -779,6 +887,7 @@ class MainApp():
 
         print("Cerrando")
 
+        self.Ruca.cerrar()
         Gtk.main_quit()
 
 

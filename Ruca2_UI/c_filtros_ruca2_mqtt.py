@@ -5,7 +5,6 @@ import paho.mqtt.client as mqtt
 import json
 import socket
 import threading
-import time
 
 
 class RUCA():
@@ -14,6 +13,9 @@ class RUCA():
 
         self.numero_filtros = 8
         self.mqtt_server = '192.168.0.243'
+        self.mqtt_conectado = False
+        self.mqtt_iniciado = False
+        self.mqtt_cerrando = False
 
         self.mosquitto = mqtt.Client()
 
@@ -22,7 +24,8 @@ class RUCA():
         self.mosquitto.on_connect = self.on_connect
         self.mosquitto.on_disconnect = self.on_disconnect
 
-        self.mosquitto.connect(self.mqtt_server, 1883, 60)
+        self.mosquitto.reconnect_delay_set(min_delay=1, max_delay=30)
+        self.mosquitto.connect_async(self.mqtt_server, 1883, 60)
 
         self.actualiza_posicion = call_back
 
@@ -46,7 +49,6 @@ class RUCA():
 
         # Carga inicial
         self.carga_archivos()
-        self.manda_nombres()
 
 
     # ==================================================
@@ -214,18 +216,42 @@ class RUCA():
 
         print("Iniciando loop MQTT")
 
-        self.mosquitto.loop_start()
+        if not self.mqtt_iniciado:
+            self.mqtt_iniciado = True
+            self.mosquitto.loop_start()
+
+
+    # ==================================================
+    def cerrar(self):
+
+        self.mqtt_cerrando = True
+        self.mqtt_conectado = False
+
+        try:
+            self.mosquitto.disconnect()
+        except (OSError, ValueError, RuntimeError):
+            pass
+
+        if self.mqtt_iniciado:
+            try:
+                self.mosquitto.loop_stop()
+            except (OSError, ValueError, RuntimeError):
+                pass
+            self.mqtt_iniciado = False
 
 
     # ==================================================
     def publica_mosquitto(self,msg,topic='oan/control/1.5m/ruca2/control'):
 
+        if not self.mqtt_conectado or self.mqtt_cerrando:
+            return
+
         try:
             print("MQTT >", topic, msg)
             self.mosquitto.publish(topic, msg)
 
-        except:
-            print("Error publicando MQTT")
+        except (OSError, ValueError, TypeError, RuntimeError):
+            pass
 
 
     # ==================================================
@@ -241,9 +267,8 @@ class RUCA():
             if self.actualiza_posicion:
                 self.actualiza_posicion(self.info)
 
-        except Exception as e:
-
-            print("Error MQTT:", e)
+        except (UnicodeError, ValueError, TypeError):
+            pass
 
 
     # ==================================================
@@ -251,9 +276,14 @@ class RUCA():
 
         print("Conectado MQTT:", rc)
 
-        self.mosquitto.subscribe(
-            "oan/control/1.5m/ruca2/estado"
-        )
+        if rc == 0 and not self.mqtt_cerrando:
+            self.mqtt_conectado = True
+            self.mosquitto.subscribe(
+                "oan/control/1.5m/ruca2/estado"
+            )
+            self.manda_nombres()
+        else:
+            self.mqtt_conectado = False
 
 
     def on_publish(self, client, userdata, mid):
@@ -264,20 +294,4 @@ class RUCA():
     # ==================================================
     def on_disconnect(self, client, userdata, rc):
 
-        print("MQTT desconectado")
-
-        while True:
-
-            time.sleep(2)
-
-            try:
-
-                print("Reconectando...")
-                self.mosquitto.connect(
-                    self.mqtt_server, 1883, 60
-                )
-                break
-
-            except:
-
-                print("Reintento fallido")
+        self.mqtt_conectado = False

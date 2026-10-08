@@ -306,9 +306,29 @@
                                             <tr>
                                                 <td>B_DOWN: {{ TablaEstadoRueda[29] }}</td>
                                             </tr>
+                                            <tr>
+                                                <td>USAR_FRENO_RUEDA: {{ TablaEstadoRueda[30] }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>USAR_SENSOR_FRENO_RUEDA: {{ TablaEstadoRueda[31] }}</td>
+                                            </tr>
                                         {% endblock %}
                                         </tbody>
                                     </table>
+
+                                    <h2>Configuracion del freno de rueda</h2>
+                                    {% if TablaEstadoRueda[30] == 0 or TablaEstadoRueda[31] == 0 %}
+                                    <p><strong>ADVERTENCIA: BYPASS DE FRENO ACTIVO</strong></p>
+                                    {% endif %}
+                                    <form action="/configfrenorueda" method="POST" onsubmit="return confirm('¿Aplicar esta configuracion del freno de rueda?');">
+                                        <input type="checkbox" id="usar_freno_rueda" name="usar_freno_rueda" value="1" {% if TablaEstadoRueda[30] == 1 %}checked{% endif %}>
+                                        <label for="usar_freno_rueda">Accionar freno de rueda</label>
+                                        <br>
+                                        <input type="checkbox" id="usar_sensor_freno_rueda" name="usar_sensor_freno_rueda" value="1" {% if TablaEstadoRueda[31] == 1 %}checked{% endif %}>
+                                        <label for="usar_sensor_freno_rueda">Validar microswitch del freno</label>
+                                        <br>
+                                        <input type="submit" value="Aplicar configuracion" class="primary">
+                                    </form>
     							</article>
 
 

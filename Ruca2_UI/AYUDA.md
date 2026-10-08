@@ -27,11 +27,14 @@ interfaz solicita confirmación cada vez que se entra a esta pestaña.
 - **INICIO** recupera e inicializa los mecanismos.
 - **Aplicar frenos** bloquea los tres mecanismos.
 - **Liberar frenos** libera los tres mecanismos.
+- **Bypass del freno** configura el accionamiento del freno de rueda y la
+  validación de su microswitch mediante `FRENO_RUEDA_CONFIG`.
 - **MOVER** realiza movimiento manual entre 1 y 500 pasos.
 
 ### Advertencias
 
 - Verifique físicamente que el mecanismo esté libre antes de liberar frenos o mover.
+- Mantenga ambos interruptores del bypass activos durante la operación normal.
 - `MUEVE` no realiza posicionamiento automático.
 - Después de `STOP` debe ejecutar `INICIO` para recuperar la operación.
 
